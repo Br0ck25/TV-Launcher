@@ -155,3 +155,10 @@
 # Audio Sync speech recognition uses JNI to read configuration fields by name.
 -keep class com.k2fsa.sherpa.onnx.** { *; }
 -keep interface com.k2fsa.sherpa.onnx.** { *; }
+
+# ── On-device ADB setup (libadb-android / BouncyCastle) ───────────────────────
+# The phone-driven Home button setup creates its ADB identity certificate through
+# BouncyCastle, whose algorithms are registered from classes loaded by name.
+-keep class org.bouncycastle.jce.provider.** { *; }
+-keep class org.bouncycastle.jcajce.provider.** { *; }
+-keep class org.bouncycastle.crypto.** { *; }

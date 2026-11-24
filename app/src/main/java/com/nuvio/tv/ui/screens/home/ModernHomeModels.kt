@@ -73,6 +73,8 @@ data class HeroPreview(
 @Immutable
 sealed class ModernPayload {
     data class ContinueWatching(val item: ContinueWatchingItem) : ModernPayload()
+    /** Launcher: one app in the Apps row. */
+    data class InstalledApp(val app: com.nuvio.tv.core.apps.InstalledApp) : ModernPayload()
     data class Catalog(
         val focusKey: String,
         val itemId: String,
@@ -226,6 +228,21 @@ internal fun ModernCarouselItem.catalogCardMetrics(
     landscapeCardWidth: androidx.compose.ui.unit.Dp,
     landscapeCardHeight: androidx.compose.ui.unit.Dp
 ): ModernCatalogCardMetrics {
+    val base = unscaledCatalogCardMetrics(
+        useLandscapePosters, portraitCardWidth, portraitCardHeight, landscapeCardWidth, landscapeCardHeight
+    )
+    if (payload !is ModernPayload.CollectionFolder) return base
+    val scale = com.nuvio.tv.ui.components.HomeTiles.scale.value
+    return if (scale == 1f) base else ModernCatalogCardMetrics(base.width * scale, base.height * scale)
+}
+
+private fun ModernCarouselItem.unscaledCatalogCardMetrics(
+    useLandscapePosters: Boolean,
+    portraitCardWidth: androidx.compose.ui.unit.Dp,
+    portraitCardHeight: androidx.compose.ui.unit.Dp,
+    landscapeCardWidth: androidx.compose.ui.unit.Dp,
+    landscapeCardHeight: androidx.compose.ui.unit.Dp
+): ModernCatalogCardMetrics {
     // Collection folders define their own tile shape — never override with
     // the global landscape-posters toggle.
     if (useLandscapePosters && payload !is ModernPayload.CollectionFolder) {
@@ -238,7 +255,7 @@ internal fun ModernCarouselItem.catalogCardMetrics(
     val posterShape = when (payload) {
         is ModernPayload.Catalog -> metaPreview?.posterShape ?: PosterShape.POSTER
         is ModernPayload.CollectionFolder -> payload.posterShape
-        is ModernPayload.ContinueWatching -> PosterShape.POSTER
+        is ModernPayload.ContinueWatching, is ModernPayload.InstalledApp -> PosterShape.POSTER
     }
 
     return when (posterShape) {

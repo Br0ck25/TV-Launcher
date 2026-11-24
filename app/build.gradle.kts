@@ -51,6 +51,12 @@ fun parseBooleanProperty(value: String?): Boolean {
     return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on"
 }
 
+// The official Nuvio account server and its publishable (public by design) client key, used when a build
+// doesn't set its own NUVIO_SUPABASE_URL / NUVIO_SUPABASE_ANON_KEY, so signing in with a real Nuvio account
+// works without any extra setup.
+val defaultSupabaseUrl = "https://api.nuvio.tv"
+val defaultSupabaseAnonKey = "sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN"
+
 fun resolveProperty(dev: Properties, local: Properties, key: String, fallback: String = ""): String {
     return dev.getProperty(key)?.trim()?.takeIf { it.isNotBlank() }
         ?: local.getProperty(key)?.trim()?.takeIf { it.isNotBlank() }
@@ -135,7 +141,7 @@ android {
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "com.nuvio.tv"
+        applicationId = "com.nuvio.tv.launcher"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 24
         targetSdk = 36
@@ -181,8 +187,8 @@ android {
         buildConfigField("String", "SENTRY_DSN", buildConfigString(sentryDsn))
 
         // In-app updater (GitHub Releases)
-        buildConfigField("String", "GITHUB_OWNER", "\"NuvioMedia\"")
-        buildConfigField("String", "GITHUB_REPO", "\"NuvioTV\"")
+        buildConfigField("String", "GITHUB_OWNER", "\"Br0ck25\"")
+        buildConfigField("String", "GITHUB_REPO", "\"TV-Launcher\"")
     }
 
     flavorDimensions += "distribution"
@@ -235,8 +241,8 @@ android {
             buildConfigField("String", "SENTRY_ENVIRONMENT", buildConfigString("debug"))
 
             // Dev environment (from local.dev.properties)
-            buildConfigField("String", "SUPABASE_URL", buildConfigString(resolveProperty(devProperties, localProperties, "NUVIO_SUPABASE_URL")))
-            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(resolveProperty(devProperties, localProperties, "NUVIO_SUPABASE_ANON_KEY")))
+            buildConfigField("String", "SUPABASE_URL", buildConfigString(resolveProperty(devProperties, localProperties, "NUVIO_SUPABASE_URL", defaultSupabaseUrl)))
+            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(resolveProperty(devProperties, localProperties, "NUVIO_SUPABASE_ANON_KEY", defaultSupabaseAnonKey)))
             buildConfigField("String", "SUPABASE_FALLBACK_URL", buildConfigString(resolveProperty(devProperties, localProperties, "NUVIO_SUPABASE_FALLBACK_URL")))
             buildConfigField("String", "TV_LOGIN_WEB_BASE_URL", "\"${devProperties.getProperty("TV_LOGIN_WEB_BASE_URL", "https://nuvio.tv/tv-login")}\"")
             buildConfigField("String", "DEVICE_LOGIN_WEB_BASE_URL", "\"${devProperties.getProperty("DEVICE_LOGIN_WEB_BASE_URL", "https://nuvio.tv/link")}\"")
@@ -270,8 +276,8 @@ android {
             buildConfigField("String", "SENTRY_ENVIRONMENT", buildConfigString("production"))
 
             // Production environment (from local.properties)
-            buildConfigField("String", "SUPABASE_URL", buildConfigString(localProperties.getProperty("NUVIO_SUPABASE_URL", "")))
-            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(localProperties.getProperty("NUVIO_SUPABASE_ANON_KEY", "")))
+            buildConfigField("String", "SUPABASE_URL", buildConfigString(localProperties.getProperty("NUVIO_SUPABASE_URL", defaultSupabaseUrl)))
+            buildConfigField("String", "SUPABASE_ANON_KEY", buildConfigString(localProperties.getProperty("NUVIO_SUPABASE_ANON_KEY", defaultSupabaseAnonKey)))
             buildConfigField("String", "SUPABASE_FALLBACK_URL", buildConfigString(localProperties.getProperty("NUVIO_SUPABASE_FALLBACK_URL", "")))
             buildConfigField("String", "TV_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("TV_LOGIN_WEB_BASE_URL", "https://nuvio.tv/tv-login")}\"")
             buildConfigField("String", "DEVICE_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("DEVICE_LOGIN_WEB_BASE_URL", "https://nuvio.tv/link")}\"")
@@ -368,13 +374,14 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
 androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
         val isPlaystore = variant.productFlavors.any { it.second == "playstore" }
-        variant.applicationId.set(if (isPlaystore) "com.nuvio.appdebug" else "com.nuviodebug.com")
+        variant.applicationId.set(if (isPlaystore) "com.nuvio.appdebug" else "com.nuvio.tv.launcher.debug")
     }
     // Only the full flavor ships the in-app updater.
     onVariants(selector().withFlavor("distribution" to "full")) { variant ->
@@ -602,6 +609,19 @@ dependencies {
     add("fullImplementation", "com.fasterxml.jackson.module:jackson-module-kotlin:2.17.0")
     add("fullImplementation", libs.nicehttp)
     add("fullImplementation", libs.conscrypt.android)
+    // On-device ADB client used by the phone-driven Home button setup (runs the commands on this TV).
+    add("fullImplementation", "com.github.MuntashirAkon:libadb-android:3.0.0")
+    // libadb-android only exposes BouncyCastle at runtime; used to create the ADB identity cert.
+    add("fullImplementation", "org.bouncycastle:bcprov-jdk15to18:1.78")
+    // Nuvio One's SMB library (jcifs-ng) pulls org.bouncycastle:bcprov-jdk18on:1.76, the same classes as the
+    // bcprov-jdk15to18:1.78 above. Two copies fail the duplicate-class check, so the full flavor keeps the newer one.
+    // (The playstore flavor has no launcher libraries and keeps jcifs-ng's own copy.)
+    configurations.matching { it.name.startsWith("full") }.configureEach {
+        exclude(group = "org.bouncycastle", module = "bcprov-jdk18on")
+    }
+    testImplementation("org.robolectric:robolectric:4.17")
+    // Icon pack tests parse appfilter.xml; Android's XmlPullParser is not on the JVM test classpath.
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
     add("fullImplementation", "com.github.recloudstream.cloudstream:library:${libs.versions.cloudstream.get()}") {
         exclude(group = "org.mozilla", module = "rhino")
         exclude(group = "com.github.AmarullisVFX", module = "newpipeextractor")
