@@ -1,0 +1,181 @@
+name: Release
+
+# Builds the signed full-flavor release APKs and publishes them as a GitHub release. The app's built-in updater
+# (Settings -> About) reads this repository's releases, so everyone who has the app is offered the new version.
+#
+# The version comes from `versionName` in app/build.gradle.kts (bump it, commit, then run this). A version with a
+# suffix such as 1.2.0-beta.4.1 is published as a pre-release, which only the Beta update channel offers.
+#
+# Run it from the Actions tab. Secrets (Settings -> Secrets and variables -> Actions):
+#   LAUNCHER_KEYSTORE_BASE64, LAUNCHER_KEY_ALIAS, LAUNCHER_KEY_PASSWORD, LAUNCHER_STORE_PASSWORD  (required: your signing key)
+#   LOCAL_PROPERTIES_BASE64  (optional: base64 copy of local.properties with the service keys, e.g. TRAKT_CLIENT_ID)
+# Every later release must use the same signing key, or users have to uninstall before they can update.
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What changed (shown at the top of the release and in the update prompt)"
+        required: false
+        type: string
+      draft:
+        description: "Create the release as a draft"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the version and check the signing key
+        id: version
+        env:
+          KEYSTORE: ${{ secrets.LAUNCHER_KEYSTORE_BASE64 }}
+        run: |
+          version=$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' app/build.gradle.kts | head -n 1)
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "versionName '$version' in app/build.gradle.kts is not a version like 1.2.0 or 1.2.0-beta.1." >&2; exit 1
+          fi
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "A release named $version already exists. Bump versionName in app/build.gradle.kts first." >&2; exit 1
+          fi
+          if [ -z "$KEYSTORE" ]; then
+            echo "The LAUNCHER_KEYSTORE_BASE64 secret is missing: a release must be signed with your own key." >&2
+            echo "Add it (and LAUNCHER_KEY_ALIAS, LAUNCHER_KEY_PASSWORD, LAUNCHER_STORE_PASSWORD) under Settings -> Secrets and variables -> Actions." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # The DV7 bridge and the native sidecars are built with the Android NDK; install the exact version the build asks for.
+      - name: Set up Android NDK
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;29.0.14206865"
+
+      - name: Fetch the Usenet native sidecars
+        run: |
+          python3 native/usenet/scripts/fetch_prebuilts.py
+          python3 native/usenet/scripts/check_prebuilts.py
+
+      # The app's keys. Starts from the LOCAL_PROPERTIES_BASE64 secret, then any individual secret replaces the same key.
+      # Anything not set anywhere is left out, and that feature stays off.
+      - name: Write app keys
+        env:
+          LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
+          LOCAL_DEV_PROPERTIES_BASE64: ${{ secrets.LOCAL_DEV_PROPERTIES_BASE64 }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+          TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
+          MDBLIST_CLIENT_ID: ${{ secrets.MDBLIST_CLIENT_ID }}
+          PREMIUMIZE_CLIENT_ID: ${{ secrets.PREMIUMIZE_CLIENT_ID }}
+          INTRODB_API_URL: ${{ secrets.INTRODB_API_URL }}
+        run: |
+          : > local.properties
+          if [ -n "$LOCAL_PROPERTIES_BASE64" ]; then printf '%s' "$LOCAL_PROPERTIES_BASE64" | base64 --decode > local.properties; fi
+          if [ -n "$LOCAL_DEV_PROPERTIES_BASE64" ]; then
+            printf '%s' "$LOCAL_DEV_PROPERTIES_BASE64" | base64 --decode > local.dev.properties
+          else
+            cp local.properties local.dev.properties
+          fi
+          # Machine-specific lines from someone's own computer must not leak into the build.
+          for f in local.properties local.dev.properties; do
+            sed -i -E '/^[[:space:]]*(sdk\.dir|NUVIO_RELEASE_[A-Z_]+)[[:space:]]*=/d' "$f"
+          done
+          set_prop() {
+            [ -n "$2" ] || return 0
+            for f in local.properties local.dev.properties; do
+              sed -i -E "/^[[:space:]]*$1[[:space:]]*=/d" "$f"
+              printf '\n%s=%s\n' "$1" "$2" >> "$f"
+            done
+          }
+          set_prop TMDB_API_KEY "$TMDB_API_KEY"
+          set_prop TRAKT_CLIENT_ID "$TRAKT_CLIENT_ID"
+          set_prop TRAKT_CLIENT_SECRET "$TRAKT_CLIENT_SECRET"
+          set_prop SIMKL_CLIENT_ID "$SIMKL_CLIENT_ID"
+          set_prop MDBLIST_CLIENT_ID "$MDBLIST_CLIENT_ID"
+          set_prop PREMIUMIZE_CLIENT_ID "$PREMIUMIZE_CLIENT_ID"
+          set_prop INTRODB_API_URL "$INTRODB_API_URL"
+          # Names only, never values.
+          echo "Keys set:"; sed -E 's/[[:space:]]*=.*//' local.properties | grep -v '^[[:space:]]*$' | sort -u
+
+      - name: Signing
+        env:
+          KEYSTORE: ${{ secrets.LAUNCHER_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.LAUNCHER_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.LAUNCHER_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.LAUNCHER_STORE_PASSWORD }}
+        run: |
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          {
+            echo "NUVIO_RELEASE_STORE_FILE=$RUNNER_TEMP/release.jks"
+            echo "NUVIO_RELEASE_KEY_ALIAS=$KEY_ALIAS"
+            echo "NUVIO_RELEASE_KEY_PASSWORD=$KEY_PASSWORD"
+            echo "NUVIO_RELEASE_STORE_PASSWORD=$STORE_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Give the build headroom
+        run: |
+          sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+          free -h
+
+      - name: Run the launcher unit tests
+        timeout-minutes: 40
+        run: |
+          chmod +x gradlew
+          ./gradlew --console=plain :app:testFullReleaseUnitTest --tests 'com.nuvio.tv.core.launcher.*' --tests 'com.nuvio.tv.core.apps.*' --tests 'com.nuvio.tv.updater.*' \
+            --stacktrace --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx5120m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8"
+
+      - name: Build the release APKs
+        timeout-minutes: 60
+        run: |
+          ./gradlew --console=plain :app:assembleFullRelease --stacktrace --no-daemon --max-workers=2 \
+            -Dorg.gradle.jvmargs="-Xmx5120m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" \
+            -Pkotlin.daemon.jvmargs="-Xmx6144m"
+
+      - name: Collect the APKs
+        run: |
+          mkdir -p out
+          # Keep the plain names (app-full-universal-release.apk, ...): the in-app updater and download links rely on them.
+          for f in $(find app/build/outputs/apk/full/release -name "*.apk"); do cp "$f" "out/$(basename "$f")"; done
+          ls -la out
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Nuvio TV Launcher ${{ steps.version.outputs.version }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          draft: ${{ inputs.draft }}
+          generate_release_notes: true
+          files: |
+            out/*.apk
+          body: |
+            Nuvio TV Launcher ${{ steps.version.outputs.version }}, built on [Nuvio TV](https://github.com/NuvioMedia/NuvioTV).
+
+            ${{ steps.version.outputs.prerelease == 'true' && '> **Beta build:** for testing, and may contain bugs. Turn on the Beta update channel in Settings > About to receive betas.' || '' }}
+
+            ${{ inputs.notes }}

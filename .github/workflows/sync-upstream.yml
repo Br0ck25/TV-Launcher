@@ -1,0 +1,91 @@
+name: Sync upstream
+
+# Every 6 hours: try merging NuvioMedia/NuvioTV (`dev`) into this repository's default branch.
+#   Clean merge  -> pushed to the branch `sync/nuviotv`, and a pull request into the default branch is opened
+#                   (or refreshed). Review it, let CI build it, merge it.
+#   Conflicts    -> nothing is pushed; an issue lists the conflicting files.
+# Set the repository variable SYNC_DIRECT to "true" to push a clean merge straight to the default branch instead.
+# That is faster but skips review; the launcher edits are listed in LAUNCHER_TOUCHPOINTS.md, so a clean merge can
+# still break the build (for example when upstream renames something a hook uses).
+# To follow another upstream branch (for example a release branch), set the repository variable UPSTREAM_SYNC_BRANCH.
+#
+# NOTE: GitHub only runs scheduled workflows from the default branch, so this file must be merged there.
+# "Allow GitHub Actions to create and approve pull requests" (Settings > Actions > General) lets it open the PR;
+# without it the branch is still pushed and the run summary says so.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  BASE_BRANCH: ${{ github.event.repository.default_branch }}
+  UPSTREAM_URL: https://github.com/NuvioMedia/NuvioTV.git
+  UPSTREAM_BRANCH: ${{ vars.UPSTREAM_SYNC_BRANCH || 'dev' }}
+  SYNC_BRANCH: sync/nuviotv
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          git config user.name "upstream-sync"
+          git config user.email "upstream-sync@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch -q upstream "$UPSTREAM_BRANCH"
+          if git merge-base --is-ancestor "upstream/$UPSTREAM_BRANCH" HEAD; then
+            echo "state=uptodate" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git merge --no-edit "upstream/$UPSTREAM_BRANCH" -m "Merge NuvioTV $UPSTREAM_BRANCH"; then
+            echo "state=clean" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            git merge --abort
+            echo "state=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push clean merge straight to the default branch
+        if: steps.merge.outputs.state == 'clean' && vars.SYNC_DIRECT == 'true'
+        run: git push origin "HEAD:refs/heads/$BASE_BRANCH"
+
+      - name: Push clean merge for review
+        if: steps.merge.outputs.state == 'clean' && vars.SYNC_DIRECT != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push --force origin "HEAD:refs/heads/$SYNC_BRANCH"
+          n=$(gh pr list --head "$SYNC_BRANCH" --base "$BASE_BRANCH" --state open --json number --jq '.[0].number' || true)
+          if [ -n "$n" ]; then
+            echo "Pull request #$n already open; the branch was refreshed." >> "$GITHUB_STEP_SUMMARY"
+          elif gh pr create --head "$SYNC_BRANCH" --base "$BASE_BRANCH" \
+              --title "Sync NuvioTV $UPSTREAM_BRANCH" \
+              --body "Automatic merge of NuvioMedia/NuvioTV \`$UPSTREAM_BRANCH\`. Build it and check the files in LAUNCHER_TOUCHPOINTS.md before merging."; then
+            echo "Opened a pull request from $SYNC_BRANCH." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Pushed $SYNC_BRANCH. Open a pull request into $BASE_BRANCH by hand (the repository does not allow Actions to create them)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report conflicts
+        if: steps.merge.outputs.state == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Upstream sync has conflicts (NuvioTV)"
+          body="Merging NuvioTV/$UPSTREAM_BRANCH into $BASE_BRANCH conflicts in:"$'\n\n'"$(sed 's/^/- /' "$RUNNER_TEMP/conflicts.txt")"$'\n\n'"Most of these are launcher hooks: see LAUNCHER_TOUCHPOINTS.md."
+          # The conflict list always goes in the run summary. Opening an issue is a bonus: it fails when the
+          # repository has Issues turned off, and that must not turn a reported conflict into a failed run.
+          { echo "### $title"; echo; echo "$body"; } >> "$GITHUB_STEP_SUMMARY"
+          echo "$body"
+          n=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body" || true; else gh issue create --title "$title" --body "$body" || true; fi
