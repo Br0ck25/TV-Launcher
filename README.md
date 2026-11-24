@@ -29,7 +29,7 @@ Pick the APK for your device:
 | Fire TV (all models), older or budget boxes | `armeabi-v7a` |
 | Not sure (works everywhere) | `universal` |
 
-The app id is `com.nuvio.tv.launcher`, so it installs next to the stock Nuvio TV and keeps its own data.
+The app id is `com.tv.launcher`, so it installs next to the stock Nuvio TV and keeps its own data.
 
 ## What the launcher adds
 
@@ -56,7 +56,7 @@ Built with Kotlin, Jetpack Compose, TV Material 3, and Media3. Development requi
 
 ### Releasing
 
-Bump `versionName` in `app/build.gradle.kts` (a suffix such as `1.2.0-beta.4.1` makes it a pre-release), commit, then run the **Release** workflow from the Actions tab. It needs the `LAUNCHER_KEYSTORE_BASE64`, `LAUNCHER_KEY_ALIAS`, `LAUNCHER_KEY_PASSWORD` and `LAUNCHER_STORE_PASSWORD` secrets, and optionally `LOCAL_PROPERTIES_BASE64` for service keys. Always sign with the same key, or users have to uninstall before they can update.
+Bump `versionName` in `app/build.gradle.kts` (a suffix such as `0.0.1-beta.1` makes it a pre-release), commit, then run the **Release** workflow from the Actions tab. It needs the `LAUNCHER_KEYSTORE_BASE64`, `LAUNCHER_KEY_ALIAS`, `LAUNCHER_KEY_PASSWORD` and `LAUNCHER_STORE_PASSWORD` secrets, and optionally `LOCAL_PROPERTIES_BASE64` for service keys. Always sign with the same key, or users have to uninstall before they can update.
 
 ## Staying in sync with Nuvio TV
 

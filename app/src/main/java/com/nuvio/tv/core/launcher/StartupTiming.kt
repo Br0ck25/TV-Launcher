@@ -12,7 +12,7 @@ import java.io.File
  * binding, and the takeover itself. Written to a small file as well as the log, because the system log keeps only
  * the last few minutes and the whole question is what happened in the first 30 seconds after boot.
  *
- * Read it with: adb shell cat /sdcard/Android/data/com.nuvio.tv.launcher/files/startup-timing.txt
+ * Read it with: adb shell cat /sdcard/Android/data/com.tv.launcher/files/startup-timing.txt
  */
 object StartupTiming {
     private const val TAG = "StartupTiming"

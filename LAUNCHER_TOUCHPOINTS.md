@@ -27,7 +27,7 @@ To check whether a bug is ours or Nuvio TV's, build the upstream commit. If the 
 | `MainActivity.kt` | Home/Apps key handling, Button Mapper dispatch, setup wizard gate, Back never exits, sidebar `launcherMode`, Apps menu entry, profile pill |
 | `NuvioApplication.kt` | Heavy services made lazy and started off the main thread so the accessibility service can bind early |
 | `AndroidManifest.xml`, `full/AndroidManifest.xml` | HOME and ALL_APPS filters, services, boot receiver, app-icon aliases, `WRITE_SECURE_SETTINGS` |
-| `app/build.gradle.kts` | App id `com.nuvio.tv.launcher`, update repo, ADB libraries, test deps |
+| `app/build.gradle.kts` | App id `com.tv.launcher`, update repo, ADB libraries, test deps |
 | `proguard-rules.pro` | Keeps BouncyCastle providers used by the ADB identity certificate |
 | `HomeScreen.kt` | Top bar, settings drawer, notifications drawer |
 | `ClassicHomeContent`, `GridHomeContent`, `ModernHomeContent`, `ModernHomeRows`, `ModernHomeRowsList`, `ModernHomeModels`, `ModernHomePresentation` | The Apps row (long-press menu, move mode) and `HomeTile` size publishing |
