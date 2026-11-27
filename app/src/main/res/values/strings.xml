@@ -911,6 +911,8 @@
     <string name="dv7_mode_strip_dv_desc">Removes the Dolby Vision RPU layer from all streams.</string>
     <string name="audio_dv5_to_dv81_title">Convert DV5 to DV8.1</string>
     <string name="audio_dv5_to_dv81_sub">Signal Profile 5 streams as Profile 8.1 for HDR10-compatible output. Helps on devices that do not have a native DV5 decoder.</string>
+    <string name="audio_zero_dovi_l5_title">Ignore Dolby Vision Letterbox Metadata (L5)</string>
+    <string name="audio_zero_dovi_l5_sub">Zeroes out Dolby Vision L5 active-area offsets during playback. Fixes darker or translucent bands along letterbox edges on files with broken L5 metadata.</string>
     <string name="audio_strip_hdr10plus_title">Strip HDR10+ Metadata</string>
     <string name="audio_strip_hdr10plus_sub">Remove HDR10+ dynamic metadata from streams. When Convert to DV8.1 is also enabled, stripping runs after conversion.</string>
     <string name="audio_dv7_preserve_mapping_title">Preserve DV mapping (DV7 to DV8.1)</string>
@@ -1125,6 +1127,7 @@
     <string name="layout_discover_location_in_sidebar_desc">Discover gets its own item in the side panel.</string>
     <string name="layout_poster_labels">Show Poster Labels</string>
     <string name="layout_poster_labels_sub">Show titles under posters in rows, grid, and see-all.</string>
+    <string name="layout_modern_poster_labels_sub">Show the title and year under posters in Home rows.</string>
     <string name="layout_addon_name">Show Addon Name</string>
     <string name="layout_addon_name_sub">Show source name under catalog titles.</string>
     <string name="layout_catalog_type">Show Catalog Type</string>
@@ -1919,6 +1922,8 @@
     <string name="settings_p2p_profile_fast_description">Uses more peer connections for difficult or high-bitrate torrents</string>
     <string name="settings_p2p_cache_size_title">Torrent cache size</string>
     <string name="settings_p2p_cache_size_description">Downloaded torrent data kept on this device for faster replays</string>
+    <string name="settings_p2p_cache_memory_only">Memory only</string>
+    <string name="settings_p2p_cache_memory_only_description">Torrent data stays in RAM and is never written to storage. Seeking back downloads it again.</string>
     <string name="settings_p2p_cache_none">No persistent cache</string>
     <string name="settings_p2p_cache_2_gb">2 GB</string>
     <string name="settings_p2p_cache_5_gb">5 GB</string>

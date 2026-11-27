@@ -688,7 +688,8 @@ class StreamRepositoryImpl @Inject constructor(
                 countryWhitelist = null,
                 proxyHeaders = headers?.let { ProxyHeaders(request = it, response = null) },
                 audioDelayMs = audioDelayMs,
-                audioDelayLanguage = audioDelayLanguage
+                audioDelayLanguage = audioDelayLanguage,
+                clearKeys = clearKeys
             ),
             infoHash = infoHash,
             fileIdx = null,
@@ -696,7 +697,8 @@ class StreamRepositoryImpl @Inject constructor(
             externalUrl = null,
             quality = quality,
             qualityValue = parseQualityValue(quality),
-            subtitles = subtitles
+            subtitles = subtitles,
+            declaredType = type
         )
     }
 

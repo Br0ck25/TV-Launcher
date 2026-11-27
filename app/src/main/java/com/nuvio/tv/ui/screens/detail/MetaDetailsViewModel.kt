@@ -34,6 +34,8 @@ import com.nuvio.tv.core.tracking.buildTrackingMediaReference
 import com.nuvio.tv.data.simkl.rewatchedCatalogueEpisodesOf
 import com.nuvio.tv.data.simkl.simklHistoryRewatchWasRecorded
 import com.nuvio.tv.core.tracking.toggleTrackingMembershipSelection
+import com.nuvio.tv.domain.model.MDBListRatings
+import com.nuvio.tv.domain.model.MDBListSettings
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.MetaTrailer
 import com.nuvio.tv.domain.model.NextToWatch
@@ -42,6 +44,7 @@ import com.nuvio.tv.domain.model.TraktCommentReview
 import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.domain.model.isSeriesLikeType
+import com.nuvio.tv.domain.model.isSeriesWithWatchableEpisodes
 import com.nuvio.tv.domain.model.isWatchedAsOneItem
 import com.nuvio.tv.domain.repository.LibraryRepository
 import com.nuvio.tv.domain.repository.MetaRepository
@@ -165,6 +168,7 @@ class MetaDetailsViewModel @Inject constructor(
     private var commentsJob: Job? = null
     private var commentsLoadMoreJob: Job? = null
     private var pendingDefaultLibraryToggle: LibraryEntryInput? = null
+    private var mdbListSettingsAtLoad: MDBListSettings? = null
 
     private var trailerDelayMs = 7000L
     private var trailerAutoplayEnabled = false
@@ -825,6 +829,7 @@ class MetaDetailsViewModel @Inject constructor(
         viewModelScope.launch {
             cancelCommentsRequests()
             val mdbListSettings = mdbListSettingsDataStore.settings.first()
+            mdbListSettingsAtLoad = mdbListSettings
             val isMdbListActive = mdbListRepository.isAvailable(mdbListSettings)
             _uiState.update {
                 it.copy(
@@ -1022,7 +1027,8 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun applyMeta(
         meta: Meta,
-        initialNextToWatch: NextToWatch?
+        initialNextToWatch: NextToWatch?,
+        cachedMdbListRatings: CachedMdbListRatings?
     ) {
         // Update the effective content ID so watch-progress observers pick up
         // the canonical ID (e.g. IMDB "tt0396375") instead of the navigation ID
@@ -1078,7 +1084,9 @@ class MetaDetailsViewModel @Inject constructor(
                 nextToWatch = effectiveNextToWatch,
                 error = null,
                 commentsEpisodeTarget = null,
-                shouldShowCommentsSection = traktCommentsEnabled && traktAuthenticated && supportsComments(meta)
+                shouldShowCommentsSection = traktCommentsEnabled && traktAuthenticated && supportsComments(meta),
+                mdbListRatings = cachedMdbListRatings?.ratings ?: it.mdbListRatings,
+                mdbListRatingOrder = cachedMdbListRatings?.order ?: it.mdbListRatingOrder
             )
         }
 
@@ -1105,9 +1113,13 @@ class MetaDetailsViewModel @Inject constructor(
             contentType = enriched.apiType
         )?.resolveForMeta(enriched)
 
+        // Home rows usually fetched this title's ratings already. Showing them with the meta avoids a second
+        // layout and draw of the hero when they would land a moment later, which froze a playing trailer.
+        val cachedMdbListRatings = if (isServerItem) null else cachedMdbListRatings(enriched)
         applyMeta(
             meta = withHandoffTrailer(enriched),
-            initialNextToWatch = cachedNextToWatch
+            initialNextToWatch = cachedNextToWatch,
+            cachedMdbListRatings = cachedMdbListRatings
         )
 
         val contentId = _effectiveContentId.value
@@ -1116,7 +1128,7 @@ class MetaDetailsViewModel @Inject constructor(
         // progress wait below, which can take long or never finish if the sync keeps failing.
         if (!isServerItem) {
             loadEpisodeRatingsAsync(enriched)
-            viewModelScope.launch { loadMDBListRatings(enriched) }
+            if (cachedMdbListRatings == null) viewModelScope.launch { loadMDBListRatings(enriched) }
         }
 
         // Wait for remote progress provider (Simkl/Trakt) to finish initial load.
@@ -1505,6 +1517,19 @@ class MetaDetailsViewModel @Inject constructor(
             }
         }
     }
+
+    private fun cachedMdbListRatings(meta: Meta): CachedMdbListRatings? {
+        val settings = mdbListSettingsAtLoad ?: return null
+        val result = mdbListRepository.cachedRatingsForMeta(
+            meta = meta,
+            fallbackItemId = itemId,
+            fallbackItemType = itemType,
+            settings = settings
+        ) ?: return null
+        return CachedMdbListRatings(result.ratings, settings.enabledRatingOrder())
+    }
+
+    private class CachedMdbListRatings(val ratings: MDBListRatings, val order: List<String>)
 
     private suspend fun loadMDBListRatings(meta: Meta) {
         val settings = mdbListSettingsDataStore.settings.first()
@@ -1946,6 +1971,9 @@ class MetaDetailsViewModel @Inject constructor(
         val updated = if (allWatched) current + allIds else current - allIds
         if (updated != current) {
             watchedSeriesStateHolder.updateWithValidation(updated, allIds)
+        }
+        _uiState.update { state ->
+            if (state.isMovieWatched == allWatched) state else state.copy(isMovieWatched = allWatched)
         }
     }
 
@@ -2620,8 +2648,12 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun toggleMovieWatched() {
         val meta = _uiState.value.meta ?: return
-        if (!meta.isWatchedAsOneItem()) return
         if (_uiState.value.isMovieWatchedPending) return
+        if (meta.isSeriesWithWatchableEpisodes()) {
+            toggleSeriesWatched(meta)
+            return
+        }
+        if (!meta.isWatchedAsOneItem()) return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isMovieWatchedPending = true) }
@@ -2640,6 +2672,54 @@ class MetaDetailsViewModel @Inject constructor(
                 )
             }
             _uiState.update { it.copy(isMovieWatchedPending = false) }
+        }
+    }
+
+    private fun toggleSeriesWatched(meta: Meta) {
+        val markWatched = !_uiState.value.isMovieWatched
+        viewModelScope.launch {
+            _uiState.update { it.copy(isMovieWatchedPending = true) }
+            val targets = meta.watchableEpisodes().filter { video ->
+                val key = video.season!! to video.episode!!
+                val watched = _uiState.value.episodeProgressMap[key]?.isCompleted() == true ||
+                    key in _uiState.value.watchedEpisodes
+                watched != markWatched
+            }
+            val keys = targets.map { it.season!! to it.episode!! }.toSet()
+            if (markWatched) {
+                _optimisticUnmarks -= keys
+                _optimisticMarks += keys
+            } else {
+                _optimisticMarks -= keys
+                _optimisticUnmarks += keys
+            }
+            runCatching {
+                if (targets.isEmpty()) return@runCatching
+                if (markWatched) {
+                    watchProgressRepository.markAsCompletedBatch(
+                        targets.map { buildCompletedEpisodeProgress(meta, it) }
+                    )
+                } else {
+                    watchProgressRepository.removeFromHistoryBatch(
+                        contentId = _effectiveContentId.value,
+                        videoId = resolveFallbackVideoId(),
+                        episodes = targets.map { Triple(it.season!!, it.episode!!, it.id) }
+                    )
+                }
+            }.onSuccess {
+                showMessage(
+                    localizedContext.getString(
+                        if (markWatched) R.string.detail_movie_marked_watched else R.string.detail_movie_marked_unwatched
+                    )
+                )
+            }.onFailure { error ->
+                showMessage(
+                    message = error.message ?: context.getString(com.nuvio.tv.R.string.detail_error_update_watched_failed),
+                    isError = true
+                )
+            }
+            _uiState.update { it.copy(isMovieWatchedPending = false) }
+            reevaluateSeriesWatchedBadge()
         }
     }
 

@@ -189,7 +189,8 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         audioDelayUsProvider: (() -> Long)? = null,
         mediaMetadata: androidx.media3.common.MediaMetadata? = null,
         cacheKey: String? = null,
-        bluray: BlurayPlaylistResolver.RemoteLayout? = null
+        bluray: BlurayPlaylistResolver.RemoteLayout? = null,
+        clearKeys: String? = null
     ): MediaSource {
         val sanitizedHeaders = sanitizeHeaders(headers)
         // A Blu-ray folder plays its feature playlist, clip by clip.
@@ -250,6 +251,10 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         }
 
         val mediaItem = mediaItemBuilder.build()
+        val drmSessionManager = clearKeys?.let { keys ->
+            Log.i(LOG_TAG, "DRM: ClearKey with ${keys.count { it == ',' } + 1} key(s)")
+            ClearKeyDrmSessionManager(keys)
+        }
 
         // The native engine owns Usenet concurrency/read-ahead. A second Java
         // prefetch layer would duplicate memory and keep obsolete ranges alive.
@@ -363,6 +368,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             customSubtitleParserFactory?.let { parserFactory ->
                 setSubtitleParserFactory(parserFactory)
             }
+            drmSessionManager?.let { manager -> setDrmSessionManagerProvider { manager } }
         }
         val forceDefaultFactory = customExtractorsFactory != null || customSubtitleParserFactory != null
 
@@ -378,9 +384,11 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             isHls && !forceDefaultFactory -> HlsMediaSource.Factory(httpDataSourceFactory)
                 .setAllowChunklessPreparation(true)
                 .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                .apply { drmSessionManager?.let { manager -> setDrmSessionManagerProvider { manager } } }
                 .createMediaSource(mediaItem)
             isDash && !forceDefaultFactory -> DashMediaSource.Factory(httpDataSourceFactory)
                 .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                .apply { drmSessionManager?.let { manager -> setDrmSessionManagerProvider { manager } } }
                 .createMediaSource(mediaItem)
             else -> defaultFactory.createMediaSource(mediaItem)
         }
@@ -949,10 +957,18 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             }
         }
 
+        internal fun mimeTypeFromDeclaredType(type: String?): String? =
+            when (type?.trim()?.lowercase(Locale.US)) {
+                "hls", "m3u8" -> MimeTypes.APPLICATION_M3U8
+                "dash", "mpd" -> MimeTypes.APPLICATION_MPD
+                else -> null
+            }
+
         internal fun inferMimeType(
             url: String,
             filename: String?,
-            responseHeaders: Map<String, String>? = null
+            responseHeaders: Map<String, String>? = null,
+            declaredType: String? = null
         ): String? {
             val adaptiveMime = inferAdaptiveMimeTypeFromPath(filename)
                 ?: inferAdaptiveMimeTypeFromPath(url)
@@ -960,7 +976,8 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                 return adaptiveMime
             }
 
-            return inferMimeTypeFromResponseHeaders(responseHeaders)
+            return mimeTypeFromDeclaredType(declaredType)
+                ?: inferMimeTypeFromResponseHeaders(responseHeaders)
                 ?: inferMimeTypeFromPath(filename)
                 ?: inferMimeTypeFromPath(url)
         }
@@ -1060,6 +1077,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                 return@withContext null
             }
             val sanitizedHeaders = sanitizeHeaders(headers)
+            val probeClient = PlayerPlaybackNetworking.createHttpClient(defaultHeaders = sanitizedHeaders)
             val methods = listOf("HEAD", "GET")
             for (method in methods) {
                 runCatching {
@@ -1076,7 +1094,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
                         requestBuilder.header("User-Agent", DEFAULT_USER_AGENT)
                     }
 
-                    PlayerPlaybackNetworking.playbackHttpClient.newCall(requestBuilder.build()).execute().use { response ->
+                    probeClient.newCall(requestBuilder.build()).execute().use { response ->
                         if (!response.isSuccessful && response.code !in 200..308) {
                             return@use null
                         }

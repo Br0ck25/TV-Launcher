@@ -271,6 +271,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 playerSettings.mpvHi10pGnextSoftwareFallbackEnabled
             mpvHardwareDecodeModeSetting = playerSettings.mpvHardwareDecodeMode
             var effectiveInternalPlayerEngine = overrideInternalPlayerEngine ?: playerSettings.internalPlayerEngine
+            if (clearKeysNeedExoPlayer) effectiveInternalPlayerEngine = InternalPlayerEngine.EXOPLAYER
             if (effectiveInternalPlayerEngine == InternalPlayerEngine.AUTO) {
                 effectiveInternalPlayerEngine = resolveAutoInternalPlayerEngine()
             }
@@ -997,6 +998,10 @@ internal fun PlayerRuntimeController.initializePlayer(
             if (stripHdr10PlusSei) {
                 Log.i(PlayerRuntimeController.TAG, "HDR10PLUS_STRIP: enabled — will remove HDR10+ SEI NALs")
             }
+            val zeroDoviLevel5 = deviceLocalPlayerPreferences.zeroDoviLevel5.first() && DoviBridge.isAvailable()
+            if (zeroDoviLevel5) {
+                Log.i(PlayerRuntimeController.TAG, "DV_L5_ZERO: enabled — will zero non-zero DV Level 5 offsets")
+            }
 
             // Always use DolbyVisionExtractorsFactory: when no DV feature is active it
             // still swaps stock Matroska for the vendored extractor (DTS-HD MA / DTS:X
@@ -1018,7 +1023,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                             manualDv81 = manualDv81Selected && !dv7Mode1Forced
                         ),
                         stripDvRpu = stripDvRpuEnabled,
-                        stripHdr10PlusSei = stripHdr10PlusSei
+                        stripHdr10PlusSei = stripHdr10PlusSei,
+                        zeroDoviLevel5 = zeroDoviLevel5
                     ).let { autoSyncExtractorsFactory(it, url, headers) } // AutoSync hook
             configureBdavAutoSync() // AutoSync hook for Blu-ray clips
 
@@ -1162,7 +1168,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                     audioDelayUsProvider = audioDelayUs::get,
                     mediaMetadata = buildMediaSessionMetadata(),
                     cacheKey = currentStreamCacheKey,
-                    bluray = currentStreamBluray
+                    bluray = currentStreamBluray,
+                    clearKeys = currentClearKeys
                 )
 
                 if (initialResumePosition > 0L) {
@@ -1759,7 +1766,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         // Fatal error: stop any next-episode auto-play that may have been
                         // armed by a short placeholder ENDED or residual post-play state.
                         cancelNextEpisodeAutoPlayOnFatalError()
-                        val canSwitchToMpvOnFatal = currentInternalPlayerEngine != InternalPlayerEngine.MVP_PLAYER &&
+                        val canSwitchToMpvOnFatal = !clearKeysNeedExoPlayer &&
+                            currentInternalPlayerEngine != InternalPlayerEngine.MVP_PLAYER &&
                             (error.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
                              error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
                              error.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
