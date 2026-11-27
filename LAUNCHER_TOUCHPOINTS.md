@@ -54,7 +54,7 @@ Branding (app icons in all colours, logo, wordmark, TV banner) replaces Nuvio TV
 ## Syncing with Nuvio TV
 
 **Releases and betas** follow Nuvio TV's tags: the **Follow Nuvio TV releases** workflow builds our beta when they tag a
-beta and our release when they tag a release (`scripts/launcher_next_release.py` decides what to build and our version).
+beta and our release when they tag a release (`.github/scripts/launcher_next_release.py` decides what to build and our version).
 Merging `dev` between releases is off unless the repository variable `SYNC_DEV` is `true`. By hand:
 
 ```bash
@@ -62,7 +62,7 @@ git config merge.ours.driver true      # once: keeps our README and branding on 
 git remote add nuviotv https://github.com/NuvioMedia/NuvioTV.git
 git fetch nuviotv dev
 git merge nuviotv/dev
-scripts/check-launcher-touchpoints.sh nuviotv/dev
+.github/scripts/check-launcher-touchpoints.sh nuviotv/dev
 ```
 
 A conflict is almost always in a hook file above: keep Nuvio TV's side, then re-add our one-line call. Nuvio TV bumps

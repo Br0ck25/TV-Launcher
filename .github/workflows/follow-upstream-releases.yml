@@ -11,7 +11,7 @@ name: Follow Nuvio TV releases
 #
 # Our version follows theirs: their beta is our next beta (0.0.1-beta.2 ...), their release is our release (0.0.1), and
 # the beta after that starts the next version (0.0.2-beta.1). Each release's notes name the Nuvio TV tag it was built on
-# ("Nuvio TV tag: <tag>"); that is how a tag is known to be built. See scripts/launcher_next_release.py.
+# ("Nuvio TV tag: <tag>"); that is how a tag is known to be built. See .github/scripts/launcher_next_release.py.
 #
 # Needs the Release workflow's signing secrets. If a Nuvio TV release changes files under .github/workflows, GitHub only
 # lets this push the result with a personal access token that has the `workflow` scope: add it as the SYNC_TOKEN secret.
@@ -75,7 +75,7 @@ jobs:
             printf '%s\n' "$FORCED_TAG" > "$RUNNER_TEMP/upstream.txt"
             : > "$RUNNER_TEMP/built.txt"; BASELINE=0.0.0
           fi
-          result=$(python3 scripts/launcher_next_release.py --upstream-tags "$RUNNER_TEMP/upstream.txt" \
+          result=$(python3 .github/scripts/launcher_next_release.py --upstream-tags "$RUNNER_TEMP/upstream.txt" \
             --built-tags "$RUNNER_TEMP/built.txt" --our-releases "$RUNNER_TEMP/ours.txt" --baseline "$BASELINE")
           echo "$result"
           tag=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["tag"])' "$result")

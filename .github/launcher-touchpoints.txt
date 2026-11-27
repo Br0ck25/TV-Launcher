@@ -1,5 +1,5 @@
 # Upstream (Nuvio TV) files the launcher is allowed to edit. One bash glob per line; comments start with #.
-# scripts/check-launcher-touchpoints.sh fails when a file that exists in Nuvio TV is changed and is not listed here:
+# .github/scripts/check-launcher-touchpoints.sh fails when a file that exists in Nuvio TV is changed and is not listed here:
 # either move the logic into launcher-owned files and keep the edit to one call, or add the file here and to
 # LAUNCHER_TOUCHPOINTS.md. Files only we have (new files) never need listing.
 

@@ -65,7 +65,7 @@ jobs:
       - name: Check the launcher hooks
         if: steps.merge.outputs.state == 'clean'
         run: |
-          if scripts/check-launcher-touchpoints.sh "upstream/$UPSTREAM_BRANCH" >> "$GITHUB_STEP_SUMMARY" 2>&1; then
+          if .github/scripts/check-launcher-touchpoints.sh "upstream/$UPSTREAM_BRANCH" >> "$GITHUB_STEP_SUMMARY" 2>&1; then
             echo "Launcher hook check passed." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "::warning::The launcher edits Nuvio TV files that are not on the allowed list; see the run summary."

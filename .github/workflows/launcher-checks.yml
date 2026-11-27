@@ -20,4 +20,6 @@ jobs:
         with:
           fetch-depth: 0
       - name: Check the Nuvio TV files we edit
-        run: scripts/check-launcher-touchpoints.sh
+        run: .github/scripts/check-launcher-touchpoints.sh
+      - name: Test the release-following script
+        run: python3 -m unittest discover -s .github/scripts -v
