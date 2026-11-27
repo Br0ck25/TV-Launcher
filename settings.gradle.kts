@@ -27,3 +27,4 @@ rootProject.name = "My Application"
 include(":app")
 include(":baselineprofile")
 include(":ffmpeg-decoder-downmix")
+include(":launcher-manifest") // Nuvio TV Launcher: its manifest entries

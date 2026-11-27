@@ -295,6 +295,16 @@ internal fun LayoutPosterCardSection(
         PresetOption(stringResource(R.string.layout_preset_pill), 16)
     )
 
+    // The same six sizes as the poster Width below, and a tile is the size of a landscape poster at that preset, so
+    // with Landscape Poster Mode on, a tile and a poster at the same preset match. Until one is chosen the tiles
+    // follow the poster Width.
+    val tileSize = com.nuvio.tv.core.launcher.rememberLauncherTileSize()
+    OptionRow(
+        title = stringResource(R.string.layout_tile_size),
+        selectedValue = tileSize.chosen ?: uiState.posterCardWidthDp,
+        options = widthOptions,
+        onSelected = tileSize.choose
+    )
     OptionRow(
         title = stringResource(R.string.layout_card_width),
         selectedValue = uiState.posterCardWidthDp,

@@ -229,6 +229,7 @@ internal fun LayoutSidebarSection(
             checked = uiState.sidebarCollapsedByDefault,
             onToggle = { onEvent(LayoutSettingsEvent.SetSidebarCollapsed(!uiState.sidebarCollapsedByDefault)) }
         )
+        LauncherPillProfileToggle() // Launcher
     } else {
         SettingsToggleRow(
             title = stringResource(R.string.layout_collapse_sidebar),

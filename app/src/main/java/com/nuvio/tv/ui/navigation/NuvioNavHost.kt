@@ -1313,6 +1313,11 @@ private fun PlaybackNavHost(
             )
         }
 
+        // Launcher: every app installed on the TV.
+        rootComposable(Screen.Apps.route) {
+            com.nuvio.tv.ui.screens.apps.AppsScreen()
+        }
+
         rootComposable(Screen.Settings.route) {
             SettingsScreen(
                 showBuiltInHeader = !hideBuiltInHeaders,

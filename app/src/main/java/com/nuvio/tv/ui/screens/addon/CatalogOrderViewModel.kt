@@ -446,7 +446,10 @@ class CatalogOrderViewModel @Inject constructor(
         followAddonsOrder: Boolean = false
     ): List<CatalogOrderItem> {
         val defaultEntries = buildDefaultCatalogEntries(addons)
-        val collectionEntries = collections.map { collection ->
+        // Launcher: the Apps row is listed like a collection, so it can be moved and turned off here.
+        val appsKey = com.nuvio.tv.core.apps.INSTALLED_APPS_CATALOG_KEY
+        val appsEntry = CatalogOrderEntry(key = appsKey, disableKey = appsKey, catalogName = "Apps", addonName = "Installed apps", typeLabel = "apps")
+        val collectionEntries = listOf(appsEntry) + collections.map { collection ->
             CatalogOrderEntry(
                 key = "collection_${collection.id}",
                 disableKey = "collection_${collection.id}",
@@ -492,7 +495,7 @@ class CatalogOrderViewModel @Inject constructor(
             val missing = unpinnedDefaultOrderKeys.filterNot { it in savedKeySet }
             unpinnedEffectiveOrder = savedValidUnpinned + missing
         }
-        val effectiveOrder = pinnedKeys + unpinnedEffectiveOrder
+        val effectiveOrder = pinnedKeys + com.nuvio.tv.core.apps.launcherAppsFirst(unpinnedEffectiveOrder, savedOrderKeys) // Launcher
         val firstUnpinnedIndex = pinnedKeySet.size
 
         return effectiveOrder.mapIndexedNotNull { index, key ->

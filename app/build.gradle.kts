@@ -654,3 +654,6 @@ dependencies {
 extra["usenetSdkDirectory"] = android.sdkDirectory.absolutePath
 extra["usenetNdkVersion"] = android.ndkVersion
 apply(from = rootProject.file("native/usenet/android.gradle.kts"))
+
+// Nuvio TV Launcher: our app id, version, update repository and libraries (see LAUNCHER_TOUCHPOINTS.md).
+apply(from = "launcher.gradle.kts")

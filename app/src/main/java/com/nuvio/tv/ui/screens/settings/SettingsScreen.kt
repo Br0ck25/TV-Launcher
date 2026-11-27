@@ -165,6 +165,7 @@ private fun settingsSectionSpec(category: SettingsCategory): SettingsSectionSpec
     SettingsCategory.PLAYBACK -> SettingsSectionSpec(category, stringResource(R.string.settings_playback), Icons.Rounded.PlayArrow, destination = SettingsSectionDestination.Inline)
     SettingsCategory.INTEGRATION -> SettingsSectionSpec(category, stringResource(R.string.settings_integration), Icons.Default.Link, destination = SettingsSectionDestination.Inline)
     SettingsCategory.TRACKING -> SettingsSectionSpec(category, stringResource(R.string.settings_tracking_title), Icons.Default.Sync, destination = SettingsSectionDestination.Inline)
+    SettingsCategory.DEFAULT_LAUNCHER, SettingsCategory.REMOTE_BUTTONS -> launcherSectionSpec(category) // Launcher
     SettingsCategory.ADVANCED -> SettingsSectionSpec(category, stringResource(R.string.settings_advanced), Icons.Default.Build, destination = SettingsSectionDestination.Inline)
     SettingsCategory.ABOUT -> SettingsSectionSpec(category, stringResource(R.string.about_title), Icons.Default.Info, destination = SettingsSectionDestination.Inline)
     SettingsCategory.DEBUG -> SettingsSectionSpec(category, stringResource(R.string.settings_debug), Icons.Default.BugReport, destination = SettingsSectionDestination.Inline)
@@ -237,6 +238,8 @@ fun SettingsScreen(
             SettingsCategory.INTEGRATION to FocusRequester(),
             SettingsCategory.TRACKING to FocusRequester(),
             SettingsCategory.PLAYBACK to FocusRequester(),
+            SettingsCategory.DEFAULT_LAUNCHER to FocusRequester(), // Launcher
+            SettingsCategory.REMOTE_BUTTONS to FocusRequester(), // Launcher
             SettingsCategory.ADVANCED to FocusRequester(),
             SettingsCategory.ABOUT to FocusRequester(),
             SettingsCategory.ACCOUNT to FocusRequester()
@@ -916,6 +919,9 @@ private fun SettingsDetailPane(
                 }
             )
         }
+        // Launcher
+        SettingsCategory.REMOTE_BUTTONS -> ButtonMapperSettingsContent(if (allowDetailAutofocus) contentFocusRequesters[selectedCategory] else null)
+        SettingsCategory.DEFAULT_LAUNCHER -> DefaultLauncherSettingsContent(if (allowDetailAutofocus) contentFocusRequesters[selectedCategory] else null)
         SettingsCategory.ADVANCED -> if (isEssentialMode) {
             EssentialAdvancedSettingsContent(
                 experienceModeViewModel = experienceModeViewModel,

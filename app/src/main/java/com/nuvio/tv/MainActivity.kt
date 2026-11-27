@@ -414,6 +414,7 @@ open class MainActivity : ComponentActivity() {
         val launchEpisode = intent?.getIntExtra("episode", -1)?.takeIf { it >= 0 }
         val launchEpisodeTitle = intent?.getStringExtra("episodeTitle")
         captureDeepLinkIntent(intent)
+        launcher.onCreate(savedInstanceState, intent)
 
         setContent {
             var hasSelectedProfileThisSession by rememberSaveable { mutableStateOf(false) }
@@ -761,7 +762,9 @@ open class MainActivity : ComponentActivity() {
                     val surfaceContentReady = hasSeenAuthQrOnFirstLaunch != null &&
                         authState !is AuthState.Loading
 
-                    if (!surfaceContentReady) {
+                    if (com.nuvio.tv.core.launcher.LauncherSetupGate { startupDestination = StartupDestination.Setup }) {
+                        // Launcher: the first-run setup is showing.
+                    } else if (!surfaceContentReady) {
                         // Still loading auth state; nothing to show yet.
                     } else if (
                         hasSeenAuthQrOnFirstLaunch == false &&
@@ -923,6 +926,7 @@ open class MainActivity : ComponentActivity() {
                         optimisticRoute = null
                         ambientIdleController.onInteraction()
                     }
+                    com.nuvio.tv.core.launcher.LauncherNavigationEffects(launcher, navController, layoutChosen, actualRoute)
 
                     // The player and home are routes inside this activity, so leaving the
                     // player or returning home never reaches onResume. Ask for the same
@@ -1115,6 +1119,7 @@ open class MainActivity : ComponentActivity() {
                             add(Screen.Home.route)
                             add(Screen.Search.route)
                             add(Screen.Library.route)
+                            add(Screen.Apps.route) // Launcher
                             add(Screen.Settings.route)
                             if (discoverLocation == DiscoverLocation.IN_SIDEBAR) {
                                 add(Screen.Discover.route)
@@ -1127,7 +1132,9 @@ open class MainActivity : ComponentActivity() {
                     val strNavSearch = stringResource(R.string.nav_search)
                     val strNavLibrary = stringResource(R.string.nav_library)
                     val strNavSettings = stringResource(R.string.nav_settings)
+                    val strNavApps = stringResource(R.string.apps_title) // Launcher
                     val drawerItems = remember(
+                        strNavApps,
                         strNavHome,
                         strNavDiscover,
                         strNavSearch,
@@ -1166,6 +1173,7 @@ open class MainActivity : ComponentActivity() {
                                     iconRes = R.raw.sidebar_library
                                 )
                             )
+                            add(DrawerItem(route = Screen.Apps.route, label = strNavApps, icon = com.nuvio.tv.core.launcher.launcherAppsIcon())) // Launcher
                             add(
                                 DrawerItem(
                                     route = Screen.Settings.route,
@@ -1189,7 +1197,9 @@ open class MainActivity : ComponentActivity() {
                         }
                     }
                     val handleExitApp: () -> Unit = {
-                        if (!confirmExitEnabled || backPressedOnce) {
+                        if (launcher.handlesHome) {
+                            // Launcher: Back never leaves the Home screen.
+                        } else if (!confirmExitEnabled || backPressedOnce) {
                             finishAffinity()
                             finishAndRemoveTask()
                             if (confirmExitEnabled) {
@@ -1205,7 +1215,8 @@ open class MainActivity : ComponentActivity() {
                     val updateViewModel: UpdateViewModel = hiltViewModel(this@MainActivity)
                     val updateState by updateViewModel.uiState.collectAsState()
                     val updateBannerState = updateState.copy(
-                        showBanner = updateState.showBanner && currentRoute?.startsWith("player/") != true
+                        showBanner = updateState.showBanner && currentRoute?.startsWith("player/") != true &&
+                            com.nuvio.tv.core.launcher.launcherSetupDone() // Launcher: not over the first-run setup
                     )
 
                     UpdateBannerHost(
@@ -1227,6 +1238,7 @@ open class MainActivity : ComponentActivity() {
                             focusedSplashTheme = null
                             hasSelectedProfileThisSession = false
                         }
+                        com.nuvio.tv.core.launcher.LauncherProfileSwitchEffect(launcher, profiles.size > 1 || activeProfileHasPin, handleSwitchProfile)
                         Box(modifier = Modifier.fillMaxSize()) {
                             CompositionLocalProvider(LocalNavViewModelStoreOwner provides navViewModelStoreOwner) {
                                 if (modernSidebarEnabled) {
@@ -1365,6 +1377,7 @@ open class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ambientIdleController.dismiss()
+        launcher.onResume()
         if (::jankStats.isInitialized) jankStats.isTrackingEnabled = true
         memberAccessRepository.refreshIfStale()
         lifecycleScope.launch {
@@ -1387,6 +1400,7 @@ open class MainActivity : ComponentActivity() {
         setIntent(intent)
         captureDeepLinkIntent(intent)
         captureLaunchIntent(intent)
+        launcher.onNewIntent(intent)
     }
 
     private fun captureDeepLinkIntent(intent: Intent?) {
@@ -1417,12 +1431,21 @@ open class MainActivity : ComponentActivity() {
 
     private val ambientIdleController = AmbientIdleController()
 
+    // Launcher: Home key, Apps key, Button Mapper and Home-role handling live in this delegate.
+    private val launcher = com.nuvio.tv.core.launcher.LauncherActivityDelegate(this) { ambientIdleController }
+
     override fun onUserInteraction() {
         super.onUserInteraction()
         ambientIdleController.onInteraction()
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        launcher.onWindowFocusChanged(hasFocus)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (launcher.onKeyEarly(event)) return true
         if (ambientIdleController.consumeKeyEvent(event)) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (longPressBackHeld.value) {
@@ -1439,6 +1462,7 @@ open class MainActivity : ComponentActivity() {
             }
             return true
         }
+        if (launcher.onKeyLate(event)) return true
         return super.dispatchKeyEvent(event)
     }
 
@@ -1542,7 +1566,13 @@ private fun LegacySidebarScaffold(
 
     BackHandler(enabled = currentRoute in rootRoutes && drawerState.currentValue == DrawerValue.Open) {
         if (longPressBackHeld.value) return@BackHandler
-        onExitApp()
+        if (com.nuvio.tv.core.launcher.LauncherMode.active) {
+            // Launcher: as the Home app, Back must never leave: just close the sidebar.
+            pendingContentFocusTransfer = true
+            drawerState.setValue(DrawerValue.Closed)
+        } else {
+            onExitApp()
+        }
     }
 
     LaunchedEffect(drawerState.currentValue, pendingContentFocusTransfer) {
@@ -1674,6 +1704,11 @@ private fun LegacySidebarScaffold(
                                 )
                             }
                         }
+                    } else if (showProfileSelector && activeProfileName.isNotEmpty()) {
+                        com.nuvio.tv.core.launcher.LauncherRailProfileAvatar(
+                            activeProfileName, activeProfileColorHex, activeProfileAvatarImageUrl,
+                            itemWidth, sidebarTokens.itemHeight, NuvioTheme.sizes.sidebar.leadingVisual
+                        )
                     }
 
                     Column(
@@ -1983,7 +2018,12 @@ private fun ModernSidebarScaffold(
 
     BackHandler(enabled = currentRoute in rootRoutes && isSidebarExpanded && !sidebarCollapsePending) {
         if (longPressBackHeld.value) return@BackHandler
-        onExitApp()
+        if (com.nuvio.tv.core.launcher.LauncherMode.active) {
+            // Launcher: as the Home app, Back must never leave: just collapse the sidebar.
+            sidebarCollapsePending = true
+        } else {
+            onExitApp()
+        }
     }
 
     LaunchedEffect(sidebarCollapsePending, isSidebarExpanded, showSidebar) {
@@ -2298,13 +2338,19 @@ private fun ModernSidebarScaffold(
                 }
             }
 
+            // Launcher: the pill can show the profile (picture and name) instead of the page.
+            val pillProfile = com.nuvio.tv.core.launcher.rememberLauncherPillProfile(
+                activeProfileName, activeProfileColorHex, activeProfileAvatarImageUrl, showProfileSelector
+            )
             if (
                 !sidebarCollapsed &&
                 sidebarShowCollapsedPill &&
-                selectedDrawerRoute != Screen.Search.route
+                selectedDrawerRoute != Screen.Search.route &&
+                com.nuvio.tv.core.launcher.launcherPillVisible(pillProfile, selectedDrawerRoute)
             ) {
                 CollapsedSidebarPill(
-                    label = selectedDrawerItem.label,
+                    profile = pillProfile,
+                    label = pillProfile?.name ?: selectedDrawerItem.label,
                     iconRes = selectedDrawerItem.iconRes,
                     icon = selectedDrawerItem.icon,
                     iconOnly = isFloatingPillIconOnly && !keepFloatingPillExpanded,
@@ -2346,6 +2392,7 @@ private fun CollapsedSidebarPill(
     blurEnabled: Boolean,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier,
+    profile: com.nuvio.tv.core.launcher.LauncherPillProfile? = null, // Launcher: shown in place of the page's icon
     onExpand: () -> Unit
 ) {
     val pillShape = RoundedCornerShape(NuvioRadii.tokens.full)
@@ -2401,7 +2448,15 @@ private fun CollapsedSidebarPill(
                         .size(NuvioTheme.sizes.sidebar.leadingVisual),
                     contentAlignment = Alignment.Center
                 ) {
-                    DrawerItemIcon(
+                    if (profile != null) {
+                        ProfileAvatarCircle(
+                            name = profile.name,
+                            colorHex = profile.colorHex,
+                            size = NuvioTheme.sizes.sidebar.leadingVisual - NuvioTheme.spacing.xs,
+                            avatarImageUrl = profile.avatarImageUrl,
+                            imageCrossfade = false
+                        )
+                    } else DrawerItemIcon(
                         iconRes = iconRes,
                         icon = icon,
                         tint = NuvioTheme.colors.text.onOverlay,

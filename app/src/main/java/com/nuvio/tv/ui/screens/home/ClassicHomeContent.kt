@@ -143,6 +143,10 @@ fun ClassicHomeContent(
             ContinueWatchingCardStyle.CARD -> if (globalLandscape) classicLandscapeCatalogHeight else classicSecondaryPosterCardStyle.width
         }
     }
+    // Launcher: the tile size the Apps row shares with Continue Watching.
+    com.nuvio.tv.ui.components.PublishClassicHomeTile(
+        classicSecondaryPosterCardStyle.width, classicLandscapeCatalogWidth, classicLandscapeCatalogHeight, globalLandscape
+    )
     // Match catalog poster label style so CW poster titles look the same as catalog ones.
     val classicPosterTitleStyle = if (uiState.continueWatchingCardStyle == ContinueWatchingCardStyle.POSTER) {
         MaterialTheme.typography.titleMedium
@@ -284,6 +288,7 @@ fun ClassicHomeContent(
             when (row) {
                 is HomeRow.Catalog -> row.row.stableKey()
                 is HomeRow.CollectionRow -> "collection_${row.collection.id}"
+                is HomeRow.InstalledApps -> com.nuvio.tv.core.apps.INSTALLED_APPS_CATALOG_KEY
                 is HomeRow.PlaceholderCatalog -> row.stableCatalogKey
             }
         }
@@ -803,6 +808,7 @@ fun ClassicHomeContent(
                         "${r.stableKey()}_$index"
                     }
                     is HomeRow.CollectionRow -> "collection_${item.collection.id}"
+                    is HomeRow.InstalledApps -> com.nuvio.tv.core.apps.INSTALLED_APPS_CATALOG_KEY
                     is HomeRow.PlaceholderCatalog -> "${item.stableCatalogKey}_$index"
                 }
             },
@@ -810,6 +816,7 @@ fun ClassicHomeContent(
                 when (item) {
                     is HomeRow.Catalog -> "catalog_row"
                     is HomeRow.CollectionRow -> "collection_row"
+                    is HomeRow.InstalledApps -> "installed_apps_row"
                     is HomeRow.PlaceholderCatalog -> "catalog_row"
                 }
             }
@@ -933,6 +940,8 @@ fun ClassicHomeContent(
                         }
                     )
                 }
+
+                is HomeRow.InstalledApps -> com.nuvio.tv.ui.components.InstalledAppsHomeRow(startPadding = NuvioTheme.spacing.xxxl, titleStyle = MaterialTheme.typography.headlineMedium) // Launcher
 
                 is HomeRow.PlaceholderCatalog -> { }
             }

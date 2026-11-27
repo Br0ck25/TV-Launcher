@@ -308,6 +308,8 @@ fun ThemeSettingsContent(
                 )
             }
 
+            LauncherIconPackCard() // Launcher
+
             AmbientModeSettingsCard()
 
             SettingsGroupCard(

@@ -271,6 +271,8 @@ internal fun buildModernHomePresentation(
                     add(mappedRow)
                 }
 
+                is HomeRow.InstalledApps -> add(launcherAppsCarouselRow(homeRow.apps, index, localizedContext.getString(R.string.apps_title))) // Launcher
+
                 is HomeRow.PlaceholderCatalog -> {
                     if (catalogRowLimit != null && renderedCatalogRows >= catalogRowLimit) {
                         return@forEachIndexed
@@ -347,6 +349,7 @@ private fun resolveVisibleHomeRows(input: ModernHomePresentationInput): List<Hom
                 is HomeRow.CollectionRow -> {
                     homeRow.collection.takeIf(Collection::hasVisibleFolders)?.let(HomeRow::CollectionRow)
                 }
+                is HomeRow.InstalledApps -> homeRow.takeIf { it.apps.isNotEmpty() }
                 is HomeRow.PlaceholderCatalog -> {
                     // Keep placeholder rows as-is — they'll be rendered as shimmer skeletons
                     homeRow
@@ -403,6 +406,7 @@ internal fun buildCarouselRowLookups(carouselRows: List<HeroCarouselRow>): Carou
                 is ModernPayload.CollectionFolder -> {
                     itemIdentities += "folder:${payload.folderId}"
                 }
+                is ModernPayload.InstalledApp -> { itemIdentities += "app:${payload.app.packageName}" } // Launcher
                 is ModernPayload.ContinueWatching -> {
                     // The card's key, one per title: a hash of the item changes with its progress,
                     // so a card that was just watched would not be found again when it moves.

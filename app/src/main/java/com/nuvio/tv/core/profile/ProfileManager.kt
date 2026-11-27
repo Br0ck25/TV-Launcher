@@ -32,8 +32,11 @@ class ProfileManager @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val activeProfileId: StateFlow<Int> = profileDataStore.activeProfileId
+    // Launcher: code that has only a Context (the apps row) reads the profile in use from ActiveProfile.
+    val activeProfileId: StateFlow<Int> = ActiveProfile.track(profileDataStore.activeProfileId)
         .stateIn(scope, SharingStarted.Eagerly, 1)
+
+    init { ActiveProfile.startBaseline(context, scope, profileDataStore) } // Launcher
 
     val activeProfileReady: StateFlow<Boolean> = profileDataStore.activeProfileId
         .map { true }

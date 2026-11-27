@@ -121,6 +121,7 @@ fun GridHomeContent(
     onFocusedRowKeyChanged: (String?) -> Unit = {},
     scrollToTopTrigger: Int = 0
 ) {
+    com.nuvio.tv.ui.components.PublishGridHomeTile() // Launcher: the tile size the Apps row shares with Continue Watching
     val gridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = gridFocusState.verticalScrollIndex,
         initialFirstVisibleItemScrollOffset = gridFocusState.verticalScrollOffset
@@ -335,6 +336,7 @@ fun GridHomeContent(
                 is GridItem.SeeAll -> "see_all_${item.addonBaseUrl.hashCode()}_${item.catalogId}_${item.addonId}_${item.type}"
                 is GridItem.CollectionHeader -> "col_header_${item.collectionId}"
                 is GridItem.CollectionFolder -> "col_folder_${item.collectionId}_${item.folder.id}"
+                is GridItem.InstalledAppsRow -> "installed_apps_row"
             }
             item to key
         }
@@ -475,7 +477,7 @@ fun GridHomeContent(
                     key = { it.second },
                     span = { pair ->
                         val spanCount = when (pair.first) {
-                            is GridItem.Hero, is GridItem.SectionDivider, is GridItem.CollectionHeader -> maxLineSpan
+                            is GridItem.Hero, is GridItem.SectionDivider, is GridItem.CollectionHeader, is GridItem.InstalledAppsRow -> maxLineSpan
                             else -> 1
                         }
                         GridItemSpan(spanCount)
@@ -488,6 +490,7 @@ fun GridHomeContent(
                             is GridItem.SeeAll -> "see_all"
                             is GridItem.CollectionHeader -> "collection_header"
                             is GridItem.CollectionFolder -> "collection_folder"
+                            is GridItem.InstalledAppsRow -> "installed_apps"
                         }
                     }
                 ) { (gridItem, itemKey) ->
@@ -678,7 +681,7 @@ fun GridHomeContent(
                     key = { it.second },
                     span = { pair ->
                         val spanCount = when (pair.first) {
-                            is GridItem.Hero, is GridItem.SectionDivider, is GridItem.CollectionHeader -> maxLineSpan
+                            is GridItem.Hero, is GridItem.SectionDivider, is GridItem.CollectionHeader, is GridItem.InstalledAppsRow -> maxLineSpan
                             else -> 1
                         }
                         GridItemSpan(spanCount)
@@ -691,6 +694,7 @@ fun GridHomeContent(
                             is GridItem.SeeAll -> "see_all"
                             is GridItem.CollectionHeader -> "collection_header"
                             is GridItem.CollectionFolder -> "collection_folder"
+                            is GridItem.InstalledAppsRow -> "installed_apps"
                         }
                     }
                 ) { (gridItem, itemKey) ->
@@ -831,6 +835,7 @@ fun GridHomeContent(
                         SectionDivider(catalogName = gridItem.title)
                     }
 
+                    is GridItem.InstalledAppsRow -> com.nuvio.tv.ui.components.InstalledAppsHomeRow(startPadding = 0.dp, titleStyle = MaterialTheme.typography.headlineMedium) // Launcher
                     is GridItem.CollectionFolder -> {
                         GridCollectionFolderCard(
                             folder = gridItem.folder,

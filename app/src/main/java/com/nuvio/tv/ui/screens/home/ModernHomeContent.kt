@@ -433,7 +433,7 @@ fun ModernHomeContent(
                         (item.payload as? ModernPayload.CollectionFolder)?.focusKey == selection.focusKey
                     }
                 }
-                is ModernPayload.ContinueWatching -> true
+                is ModernPayload.ContinueWatching, is ModernPayload.InstalledApp -> true
             }
         } ?: false
         if (staleSelection) {
@@ -708,6 +708,8 @@ fun ModernHomeContent(
         ContinueWatchingCardStyle.WIDE -> continueWatchingCardWidth * WIDE_CARD_HEIGHT_RATIO
         ContinueWatchingCardStyle.CARD -> continueWatchingCardWidth / 1.77f
     }
+
+    com.nuvio.tv.ui.components.PublishModernHomeTile(portraitBaseWidth * 1.24f * continueWatchingScale) // Launcher
 
     val localConfiguration = LocalConfiguration.current
     val screenWidth = localConfiguration.screenWidthDp.dp

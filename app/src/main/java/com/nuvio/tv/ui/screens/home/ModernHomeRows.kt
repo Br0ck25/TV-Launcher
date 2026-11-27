@@ -266,7 +266,7 @@ private fun ModernCatalogRowItem(
     val focusKey = when (payload) {
         is ModernPayload.Catalog -> payload.focusKey
         is ModernPayload.CollectionFolder -> payload.focusKey
-        is ModernPayload.ContinueWatching -> error("Unsupported payload for ModernCatalogRowItem")
+        is ModernPayload.ContinueWatching, is ModernPayload.InstalledApp -> error("Unsupported payload for ModernCatalogRowItem")
     }
 
     val metaPreview = item.metaPreview
@@ -328,7 +328,7 @@ private fun ModernCatalogRowItem(
                     )
                 )
             }
-            is ModernPayload.ContinueWatching -> Unit
+            is ModernPayload.ContinueWatching, is ModernPayload.InstalledApp -> Unit
         }
     }
 
@@ -426,7 +426,7 @@ private fun ModernCatalogRowItem(
                         payload.folderId
                     )
                 }
-                is ModernPayload.ContinueWatching -> Unit
+                is ModernPayload.ContinueWatching, is ModernPayload.InstalledApp -> Unit
             }
         },
         onLongPress = onLongPress,
@@ -506,6 +506,9 @@ internal fun ModernRowSection(
 
     // Blocks vertical focus exit during placeholder→data transition.
     val blockingFocusExit = remember { mutableStateOf(false) }
+
+    // Launcher: the Apps row's state and long-press menu (null for every other row). See LauncherAppsRow.kt.
+    val launcherApps = rememberLauncherAppsRow(row)
 
     // Item keys carry item identity, which the placeholder the ring sits on loses when real data
     // arrives: its key changes and Compose tears the focused node down. Lend that one card a
@@ -682,6 +685,7 @@ internal fun ModernRowSection(
             val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
             fun imageUrlAndKey(item: ModernCarouselItem): Pair<String, MemoryCache.Key>? {
                 return when (val payload = item.payload) {
+                    is ModernPayload.InstalledApp -> null
                     is ModernPayload.Catalog -> {
                         val url = item.imageUrl ?: return null
                         val metrics = item.catalogCardMetrics(
@@ -754,6 +758,7 @@ internal fun ModernRowSection(
                 for (i in 0 until minOf(POSTER_PREFETCH_DISTANCE, items.size)) {
                     val item = items.getOrNull(i) ?: continue
                     val (wPx, hPx) = when (item.payload) {
+                        is ModernPayload.InstalledApp -> 0 to 0
                         is ModernPayload.Catalog -> {
                             val metrics = item.catalogCardMetrics(
                                 useLandscapePosters = useLandscapePosters,
@@ -790,6 +795,7 @@ internal fun ModernRowSection(
                         for (i in (lastVisibleIndex + 1)..(lastVisibleIndex + POSTER_PREFETCH_DISTANCE)) {
                             val item = currentItems.getOrNull(i) ?: continue
                             val (wPx, hPx) = when (item.payload) {
+                                is ModernPayload.InstalledApp -> 0 to 0
                                 is ModernPayload.Catalog -> {
                                     val metrics = item.catalogCardMetrics(
                                         useLandscapePosters = useLandscapePosters,
@@ -912,10 +918,13 @@ internal fun ModernRowSection(
                 null
             }
 
+            launcherApps?.CarryEffects(row, rowListState, onRowItemFocused) // Launcher
+
             LazyRow(
                 state = rowListState,
                 modifier = Modifier
                     .recompositionHighlighter()
+                    .then(launcherApps?.moveKeys(row, rowListState) ?: Modifier) // Launcher
                     .focusRequester(rowFocusRequester)
                     .focusRestorer {
                         val savedIdx = rowFocusedIndex.value
@@ -943,6 +952,7 @@ internal fun ModernRowSection(
                             is ModernPayload.ContinueWatching -> "modern_cw_card"
                             is ModernPayload.Catalog -> if (payload.itemId.startsWith("__placeholder_")) "placeholder" else payload.itemType
                             is ModernPayload.CollectionFolder -> "modern_collection_folder_card"
+                            is ModernPayload.InstalledApp -> "installed_app"
                         }
                     }
                 ) { index, item ->
@@ -970,6 +980,8 @@ internal fun ModernRowSection(
                     }
 
                     when (val payload = item.payload) {
+                        is ModernPayload.InstalledApp ->
+                            LauncherInstalledAppItem(launcherApps, payload.app, requester, isTargetItem, onFocused, posterCardCornerRadius) // Launcher
                         is ModernPayload.ContinueWatching -> {
                             ModernContinueWatchingRowItem(
                                 payload = payload,

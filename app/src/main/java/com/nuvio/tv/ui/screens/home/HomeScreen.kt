@@ -93,7 +93,8 @@ fun HomeScreen(
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit = { _, _, _ -> },
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> }
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val homeUiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState = homeUiState.withLauncherRows() // Launcher: the Apps row counts as content
 
     // Home was the only major screen without a lifecycle observer, so nothing ever told it to
     // look at its catalogs again.
@@ -117,6 +118,7 @@ fun HomeScreen(
     )
     val hasCatalogContent = uiState.catalogRows.any { it.items.isNotEmpty() }
     val hasCollectionContent = uiState.homeRows.any { it is HomeRow.CollectionRow }
+    val hasInstalledAppsContent = uiState.homeRows.any { it is HomeRow.InstalledApps && it.apps.isNotEmpty() }
     val hasHeroContent = uiState.heroItems.isNotEmpty()
     val modernPresentationReady =
         uiState.homeLayout != HomeLayout.MODERN ||
@@ -194,7 +196,7 @@ fun HomeScreen(
         modernPresentationReady
     ) {
         // Track that addons are known (even if isLoading flipped too fast to catch).
-        if (uiState.installedAddonsCount > 0) {
+        if (uiState.installedAddonsCount > 0 || (hasInstalledAppsContent && !uiState.isLoading)) {
             catalogLoadingStarted = true
         }
         // Wait until catalog loading has completed with content AND the CW
@@ -205,7 +207,7 @@ fun HomeScreen(
             initialCwResolved &&
             modernPresentationReady &&
             // When addons are installed, require at least one catalog row.
-            (hasCatalogContent || uiState.installedAddonsCount == 0)
+            (hasCatalogContent || hasInstalledAppsContent || uiState.installedAddonsCount == 0)
         ) {
             Log.d("HomeGate", "RELEASE: catalogs=$hasCatalogContent cwResolved=$initialCwResolved cwItems=${uiState.continueWatchingItems.size} addons=${uiState.installedAddonsCount}")
             homeStableGateReleased = true
@@ -243,7 +245,8 @@ fun HomeScreen(
     val hasAnyContent = uiState.catalogRows.isNotEmpty() ||
         (uiState.continueWatchingEnabled && uiState.continueWatchingItems.isNotEmpty()) ||
         uiState.heroItems.isNotEmpty() ||
-        hasCollectionContent
+        hasCollectionContent ||
+        hasInstalledAppsContent
     val showStartupLoader = when {
         !uiState.layoutPreferencesReady -> true
         uiState.isLoading && !hasAnyContent -> true
@@ -458,6 +461,8 @@ fun HomeScreen(
                 )
             }
         }
+
+        LauncherHomeOverlay(scrollToTopTrigger, showTopBar = !showHomeLoader) // Launcher: top bar and its panels
     }
 
     val selectedPoster = posterOptionsTarget
