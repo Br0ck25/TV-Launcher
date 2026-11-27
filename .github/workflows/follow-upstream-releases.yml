@@ -1,0 +1,187 @@
+name: Follow Nuvio TV releases
+
+# When Nuvio TV publishes a beta, build our beta; when it publishes a release, build our release.
+#
+# Every hour this looks at NuvioMedia/NuvioTV's tags. For the oldest tag we have not built yet (one per run, so a stable
+# release is never skipped) it:
+#   1. merges exactly that tag into a branch `release/<version>` and bumps our version (app/launcher.gradle.kts),
+#   2. builds and publishes it with the Release workflow (a beta stays a pre-release),
+#   3. only after the build succeeds, moves the default branch to that commit.
+# A merge conflict or a failed build opens an issue and leaves the default branch alone. Close the issue to try again.
+#
+# Our version follows theirs: their beta is our next beta (0.0.1-beta.2 ...), their release is our release (0.0.1), and
+# the beta after that starts the next version (0.0.2-beta.1). Each release's notes name the Nuvio TV tag it was built on
+# ("Nuvio TV tag: <tag>"); that is how a tag is known to be built. See scripts/launcher_next_release.py.
+#
+# Needs the Release workflow's signing secrets. If a Nuvio TV release changes files under .github/workflows, GitHub only
+# lets this push the result with a personal access token that has the `workflow` scope: add it as the SYNC_TOKEN secret.
+#
+# Repository variables (all optional):
+#   UPSTREAM_BASELINE_TAG  the Nuvio TV tag we were first built on; it and older tags are never built (default 1.2.0-beta.4)
+#   FOLLOW_UPSTREAM        set to "false" to switch the hourly schedule off
+# NOTE: GitHub only runs scheduled workflows from the default branch, so this file must be merged there.
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Build this Nuvio TV tag now (default: the oldest one not built yet)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: follow-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_URL: https://github.com/NuvioMedia/NuvioTV.git
+  BASE_BRANCH: ${{ github.event.repository.default_branch }}
+
+jobs:
+  detect:
+    if: github.event_name == 'workflow_dispatch' || vars.FOLLOW_UPSTREAM != 'false'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      version: ${{ steps.pick.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Find the next Nuvio TV tag to build
+        id: pick
+        env:
+          BASELINE: ${{ vars.UPSTREAM_BASELINE_TAG || '1.2.0-beta.4' }}
+          FORCED_TAG: ${{ inputs.tag }}
+        run: |
+          # Nuvio TV's tags (not the ^{} lines for annotated tags).
+          git ls-remote --tags "$UPSTREAM_URL" | grep -v '\^{}' | sed 's#.*refs/tags/##' > "$RUNNER_TEMP/upstream.txt"
+          # Tags we already built (named in our releases' notes), and our own release versions.
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].body // ""' \
+            | sed -nE 's/^[[:space:]]*Nuvio TV tag:[[:space:]]*([^[:space:]]+).*$/\1/p' > "$RUNNER_TEMP/built.txt" || true
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --jq '.[].tag_name' > "$RUNNER_TEMP/ours.txt" || true
+          touch "$RUNNER_TEMP/built.txt" "$RUNNER_TEMP/ours.txt"
+
+          if [ -n "$FORCED_TAG" ]; then
+            grep -qxF "$FORCED_TAG" "$RUNNER_TEMP/upstream.txt" || { echo "Nuvio TV has no tag '$FORCED_TAG'." >&2; exit 1; }
+            printf '%s\n' "$FORCED_TAG" > "$RUNNER_TEMP/upstream.txt"
+            : > "$RUNNER_TEMP/built.txt"; BASELINE=0.0.0
+          fi
+          result=$(python3 scripts/launcher_next_release.py --upstream-tags "$RUNNER_TEMP/upstream.txt" \
+            --built-tags "$RUNNER_TEMP/built.txt" --our-releases "$RUNNER_TEMP/ours.txt" --baseline "$BASELINE")
+          echo "$result"
+          tag=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["tag"])' "$result")
+          version=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("version",""))' "$result")
+
+          # A failed attempt leaves an open issue: do not rebuild every hour until someone closes it.
+          if [ -n "$tag" ] && [ -z "$FORCED_TAG" ]; then
+            open=$(gh issue list --state open --search "\"Release build failed ($tag)\" in:title" --json number --jq 'length' 2>/dev/null || echo 0)
+            if [ "$open" != "0" ]; then
+              echo "Nuvio TV $tag already failed; close its issue to try again."; tag=""; version=""
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ -z "$tag" ]; then echo "Nothing new from Nuvio TV." >> "$GITHUB_STEP_SUMMARY"; else echo "Building Nuvio TV $tag as $version." >> "$GITHUB_STEP_SUMMARY"; fi
+
+  prepare:
+    needs: detect
+    if: needs.detect.outputs.tag != ''
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.merge.outputs.ok }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.detect.outputs.tag }}
+      VERSION: ${{ needs.detect.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Merge the Nuvio TV tag and bump our version
+        id: merge
+        run: |
+          git config user.name "upstream-sync"
+          git config user.email "upstream-sync@users.noreply.github.com"
+          # Files that are ours entirely (README, branding: see .gitattributes) keep our version on a conflict.
+          git config merge.ours.driver true
+          git remote add upstream "$UPSTREAM_URL"
+          git fetch -q upstream "+refs/tags/$TAG:refs/upstream-tags/$TAG"
+          git checkout -q -b "release/$VERSION"
+          if ! git merge --no-edit "refs/upstream-tags/$TAG" -m "Merge Nuvio TV $TAG"; then
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            git merge --abort
+            title="Release build failed ($TAG)"
+            body="Merging Nuvio TV $TAG into $BASE_BRANCH conflicts in:"$'\n\n'"$(sed 's/^/- /' "$RUNNER_TEMP/conflicts.txt")"$'\n\n'"Most of these are launcher hooks: see LAUNCHER_TOUCHPOINTS.md. Resolve it by merging the tag by hand, then close this issue so the next hourly run does not skip $TAG."
+            { echo "### $title"; echo; echo "$body"; } >> "$GITHUB_STEP_SUMMARY"
+            gh issue create --title "$title" --body "$body" || true
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The next version code is the current one plus one.
+          code=$(sed -nE 's/^val launcherVersionCode[[:space:]]*=[[:space:]]*([0-9]+).*$/\1/p' app/launcher.gradle.kts | head -n 1)
+          sed -i -E "s/^(val launcherVersionName[[:space:]]*=[[:space:]]*)\"[^\"]*\"/\1\"$VERSION\"/; s/^(val launcherVersionCode[[:space:]]*=[[:space:]]*)[0-9]+/\1$((code + 1))/" app/launcher.gradle.kts
+          git add app/launcher.gradle.kts
+          git commit -q -m "Release $VERSION (Nuvio TV $TAG)"
+          git push --force origin "HEAD:refs/heads/release/$VERSION"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [detect, prepare]
+    if: needs.prepare.outputs.ok == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      ref: release/${{ needs.detect.outputs.version }}
+      notes: |
+        Built on Nuvio TV ${{ needs.detect.outputs.tag }}.
+
+        Nuvio TV tag: ${{ needs.detect.outputs.tag }}
+    secrets: inherit
+
+  finish:
+    needs: [detect, prepare, build]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.detect.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+      - name: Move the default branch to the released commit
+        run: |
+          git fetch -q origin "release/$VERSION"
+          if git merge --ff-only "origin/release/$VERSION"; then
+            git push origin "HEAD:refs/heads/$BASE_BRANCH"
+          else
+            echo "::warning::$BASE_BRANCH moved while the build ran; merge release/$VERSION into it by hand."
+            exit 0
+          fi
+          git push origin --delete "release/$VERSION" || true
+
+  report:
+    needs: [detect, prepare, build]
+    if: always() && needs.prepare.outputs.ok == 'true' && needs.build.result != 'success'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Open an issue for the failed build
+        run: |
+          title="Release build failed (${{ needs.detect.outputs.tag }})"
+          body="Building Nuvio TV ${{ needs.detect.outputs.tag }} as ${{ needs.detect.outputs.version }} failed or was cancelled: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"$'\n\n'"The merged code is on the branch release/${{ needs.detect.outputs.version }}; the default branch was not changed. Fix it there (or on the default branch), then close this issue so the next hourly run tries again."
+          { echo "### $title"; echo; echo "$body"; } >> "$GITHUB_STEP_SUMMARY"
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" || true

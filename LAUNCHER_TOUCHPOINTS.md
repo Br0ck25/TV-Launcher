@@ -53,7 +53,9 @@ Branding (app icons in all colours, logo, wordmark, TV banner) replaces Nuvio TV
 
 ## Syncing with Nuvio TV
 
-The **Sync upstream** workflow does a merge every six hours. By hand:
+**Releases and betas** follow Nuvio TV's tags: the **Follow Nuvio TV releases** workflow builds our beta when they tag a
+beta and our release when they tag a release (`scripts/launcher_next_release.py` decides what to build and our version).
+Merging `dev` between releases is off unless the repository variable `SYNC_DEV` is `true`. By hand:
 
 ```bash
 git config merge.ours.driver true      # once: keeps our README and branding on a conflict

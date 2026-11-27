@@ -1,6 +1,7 @@
 name: Sync upstream
 
-# Every 6 hours: try merging NuvioMedia/NuvioTV (`dev`) into this repository's default branch.
+# Every 6 hours, when the repository variable SYNC_DEV is "true" (or when run by hand): try merging NuvioMedia/NuvioTV
+# (`dev`) into this repository's default branch. Releases and betas are followed by "Follow Nuvio TV releases" instead.
 #   Clean merge  -> pushed to the branch `sync/nuviotv`, and a pull request into the default branch is opened
 #                   (or refreshed). Review it, let CI build it, merge it.
 #   Conflicts    -> nothing is pushed; an issue lists the conflicting files.
@@ -30,6 +31,9 @@ env:
 
 jobs:
   sync:
+    # Off by default: "Follow Nuvio TV releases" builds our releases from Nuvio TV's tags. Turn this on (repository
+    # variable SYNC_DEV = true) to also keep merging Nuvio TV's `dev`, or run it by hand from the Actions tab.
+    if: github.event_name == 'workflow_dispatch' || vars.SYNC_DEV == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

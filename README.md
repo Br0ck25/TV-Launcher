@@ -56,16 +56,21 @@ Built with Kotlin, Jetpack Compose, TV Material 3, and Media3. Development requi
 
 ### Releasing
 
+**Automatic:** the **Follow Nuvio TV releases** workflow checks Nuvio TV's tags every hour. When Nuvio TV publishes a beta it builds our next beta; when Nuvio TV publishes a release it builds our release. It merges exactly that tag, builds it, and moves the default branch only if the build succeeds. A conflict or a failed build opens an issue instead. Our version follows theirs: a Nuvio TV beta is our next beta (`0.0.1-beta.2`), a Nuvio TV release is our release (`0.0.1`), and the beta after that starts the next version (`0.0.2-beta.1`).
+
+**By hand:**
+
 Bump `launcherVersionName` and `launcherVersionCode` in `app/launcher.gradle.kts` (a suffix such as `0.0.1-beta.1` makes it a pre-release), commit, then run the **Release** workflow from the Actions tab. It needs the `LAUNCHER_KEYSTORE_BASE64`, `LAUNCHER_KEY_ALIAS`, `LAUNCHER_KEY_PASSWORD` and `LAUNCHER_STORE_PASSWORD` secrets, and optionally `LOCAL_PROPERTIES_BASE64` for service keys. Always sign with the same key, or users have to uninstall before they can update.
 
 ## Staying in sync with Nuvio TV
 
 Launcher code lives in files of its own; Nuvio TV's files only get one-line hooks (see
-[LAUNCHER_TOUCHPOINTS.md](LAUNCHER_TOUCHPOINTS.md)). The **Sync upstream** workflow merges
-[NuvioMedia/NuvioTV](https://github.com/NuvioMedia/NuvioTV) `dev` into this repository every six hours. A clean merge is
-pushed to `sync/nuviotv` and opened as a pull request; a conflicting merge opens an issue listing the files. Set the
-repository variable `SYNC_DIRECT` to `true` to push clean merges straight to the default branch instead. The **Launcher
-checks** workflow fails any change that edits a Nuvio TV file that is not on the allowed list.
+[LAUNCHER_TOUCHPOINTS.md](LAUNCHER_TOUCHPOINTS.md)). Nuvio TV releases and betas come from its `dev` branch, and the
+**Follow Nuvio TV releases** workflow builds ours from its tags (see Releasing above), so we only ever ship code Nuvio TV
+has tagged. To also keep merging `dev` between releases, set the repository variable `SYNC_DEV` to `true`: the **Sync
+upstream** workflow then merges it every six hours, as a pull request from `sync/nuviotv` (or straight to the default
+branch with `SYNC_DIRECT` set to `true`). The **Launcher checks** workflow fails any change that edits a Nuvio TV file
+that is not on the allowed list.
 
 ## Credits
 
