@@ -1,0 +1,47 @@
+# Upstream (Nuvio TV) files the launcher is allowed to edit. One bash glob per line; comments start with #.
+# scripts/check-launcher-touchpoints.sh fails when a file that exists in Nuvio TV is changed and is not listed here:
+# either move the logic into launcher-owned files and keep the edit to one call, or add the file here and to
+# LAUNCHER_TOUCHPOINTS.md. Files only we have (new files) never need listing.
+
+# Build and manifests
+settings.gradle.kts
+app/build.gradle.kts
+app/src/main/AndroidManifest.xml
+app/src/full/AndroidManifest.xml
+
+# Activity, application, profiles, navigation
+app/src/main/java/com/nuvio/tv/MainActivity.kt
+app/src/main/java/com/nuvio/tv/NuvioApplication.kt
+app/src/main/java/com/nuvio/tv/core/profile/ProfileManager.kt
+app/src/main/java/com/nuvio/tv/ui/navigation/NuvioNavHost.kt
+app/src/main/java/com/nuvio/tv/ui/navigation/Screen.kt
+
+# Home screen: the Apps row
+app/src/main/java/com/nuvio/tv/ui/screens/home/HomeScreen.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/HomeUiState.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/HomeViewModel.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/HomeViewModelCatalogPipeline.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/HomeViewModelCatalogUtils.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/ClassicHomeContent.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/GridHomeContent.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/ModernHomeContent.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/ModernHomeModels.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/ModernHomePresentation.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/ModernHomeRows.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/ModernHomeRowsList.kt
+app/src/main/java/com/nuvio/tv/ui/screens/addon/CatalogOrderViewModel.kt
+
+# Settings
+app/src/main/java/com/nuvio/tv/ui/screens/settings/SettingsScreen.kt
+app/src/main/java/com/nuvio/tv/ui/screens/settings/SettingsCatalog.kt
+app/src/main/java/com/nuvio/tv/ui/screens/settings/ThemeSettingsScreen.kt
+app/src/main/java/com/nuvio/tv/ui/screens/settings/LayoutCardSettings.kt
+app/src/main/java/com/nuvio/tv/ui/screens/settings/LayoutHomeSettings.kt
+
+# Branding and text we own entirely (the merge driver keeps ours on a conflict, see .gitattributes)
+README.md
+app/src/main/res/values/strings.xml
+assets/brand/*
+app/src/main/res/mipmap-*/*
+app/src/main/res/drawable/*
+app/src/main/res/drawable-nodpi/*

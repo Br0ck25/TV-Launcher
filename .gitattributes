@@ -1,0 +1,13 @@
+# Files that are ours. When Nuvio TV changes one of them too, an upstream sync keeps our version instead of stopping on
+# a conflict. The "ours" merge driver is not built into git: the sync workflow turns it on (git config merge.ours.driver true).
+# To use it locally, run that command once.
+README.md merge=ours
+LAUNCHER_TOUCHPOINTS.md merge=ours
+assets/brand/*.png merge=ours
+app/src/main/res/mipmap-*/ic_launcher*.png merge=ours
+app/src/main/res/mipmap-*/banner*.png merge=ours
+app/src/main/res/drawable/ic_launcher.png merge=ours
+app/src/main/res/drawable/tv_banner.png merge=ours
+app/src/main/res/drawable/nuvio_text.png merge=ours
+app/src/main/res/drawable-nodpi/app_logo*.png merge=ours
+app/src/main/res/drawable-nodpi/tv_banner.png merge=ours

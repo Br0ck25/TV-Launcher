@@ -1,0 +1,23 @@
+name: Launcher checks
+
+# Keeps the launcher's edits to Nuvio TV files small: fails when a Nuvio TV file is changed that is not on the allowed
+# list (.github/launcher-touchpoints.txt). That list is what makes syncing with Nuvio TV easy.
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - "sync/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  touchpoints:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the Nuvio TV files we edit
+        run: scripts/check-launcher-touchpoints.sh
