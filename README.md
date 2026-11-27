@@ -56,11 +56,11 @@ Built with Kotlin, Jetpack Compose, TV Material 3, and Media3. Development requi
 
 ### Releasing
 
-**Automatic:** the **Follow Nuvio TV releases** workflow checks Nuvio TV's tags every hour. When Nuvio TV publishes a beta it builds our next beta; when Nuvio TV publishes a release it builds our release. It merges exactly that tag, builds it, and moves the default branch only if the build succeeds. A conflict or a failed build opens an issue instead. Our version follows theirs: a Nuvio TV beta is our next beta (`0.0.1-beta.2`), a Nuvio TV release is our release (`0.0.1`), and the beta after that starts the next version (`0.0.2-beta.1`).
+**Automatic:** the **Follow Nuvio TV releases** workflow checks Nuvio TV's tags every hour. When Nuvio TV publishes a beta it builds our beta; when Nuvio TV publishes a release it builds our release. It merges exactly that tag, builds it, and moves the default branch only if the build succeeds. A conflict or a failed build opens an issue instead. Our version is Nuvio TV's: their `1.2.0-beta.5` is our `1.2.0-beta.5`, and their `1.2.0` is our `1.2.0`.
 
 **By hand:**
 
-Bump `launcherVersionName` and `launcherVersionCode` in `app/launcher.gradle.kts` (a suffix such as `0.0.1-beta.1` makes it a pre-release), commit, then run the **Release** workflow from the Actions tab. It needs the `LAUNCHER_KEYSTORE_BASE64`, `LAUNCHER_KEY_ALIAS`, `LAUNCHER_KEY_PASSWORD` and `LAUNCHER_STORE_PASSWORD` secrets, and optionally `LOCAL_PROPERTIES_BASE64` for service keys. Always sign with the same key, or users have to uninstall before they can update.
+Bump `launcherVersionName` and `launcherVersionCode` in `app/launcher.gradle.kts` (a suffix such as `1.2.0-beta.4` makes it a pre-release; for a launcher-only fix between Nuvio TV releases, add a number, e.g. `1.2.0-beta.4.1`), commit, then run the **Release** workflow from the Actions tab. It needs the `LAUNCHER_KEYSTORE_BASE64`, `LAUNCHER_KEY_ALIAS`, `LAUNCHER_KEY_PASSWORD` and `LAUNCHER_STORE_PASSWORD` secrets, and optionally `LOCAL_PROPERTIES_BASE64` for service keys. Always sign with the same key, or users have to uninstall before they can update.
 
 ## Staying in sync with Nuvio TV
 

@@ -3,26 +3,33 @@ import unittest
 import launcher_next_release as r
 
 
-class NextVersion(unittest.TestCase):
-    def test_first_release(self):
-        self.assertEqual(r.next_version([], True), "0.0.1-beta.1")
-        self.assertEqual(r.next_version([], False), "0.0.1")
+class Version(unittest.TestCase):
+    def run_main(self, upstream, built=(), baseline="1.2.0-beta.4"):
+        import io, json, os, tempfile
+        from contextlib import redirect_stdout
+        with tempfile.TemporaryDirectory() as d:
+            files = {}
+            for name, lines in (("up", upstream), ("built", built)):
+                files[name] = os.path.join(d, name)
+                with open(files[name], "w") as f:
+                    f.write("\n".join(lines) + "\n")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                r.main(["--upstream-tags", files["up"], "--built-tags", files["built"], "--baseline", baseline])
+            return json.loads(out.getvalue())
 
-    def test_beta_after_beta(self):
-        self.assertEqual(r.next_version(["0.0.1-beta.1"], True), "0.0.1-beta.2")
-        self.assertEqual(r.next_version(["0.0.1-beta.2", "0.0.1-beta.10", "0.0.1-beta.9"], True), "0.0.1-beta.11")
+    def test_beta_keeps_nuvio_tvs_version(self):
+        self.assertEqual(self.run_main(["1.2.0-beta.5"]), {"tag": "1.2.0-beta.5", "prerelease": True, "version": "1.2.0-beta.5"})
 
-    def test_stable_after_beta_drops_the_suffix(self):
-        self.assertEqual(r.next_version(["0.0.1-beta.1", "0.0.1-beta.2"], False), "0.0.1")
+    def test_release_keeps_nuvio_tvs_version(self):
+        out = self.run_main(["1.2.0"], built=["1.2.0-beta.5"])
+        self.assertEqual((out["version"], out["prerelease"]), ("1.2.0", False))
 
-    def test_beta_after_stable_starts_the_next_version(self):
-        self.assertEqual(r.next_version(["0.0.1-beta.2", "0.0.1"], True), "0.0.2-beta.1")
+    def test_v_prefix_is_dropped(self):
+        self.assertEqual(self.run_main(["v1.3.0-beta.1"])["version"], "1.3.0-beta.1")
 
-    def test_stable_after_stable(self):
-        self.assertEqual(r.next_version(["0.0.1"], False), "0.0.2")
-
-    def test_ignores_other_tags(self):
-        self.assertEqual(r.next_version(["v1", "nightly", "0.0.3-beta.1"], True), "0.0.3-beta.2")
+    def test_nothing_new(self):
+        self.assertEqual(self.run_main(["1.2.0-beta.4"]), {"tag": ""})
 
 
 class NextUpstreamTag(unittest.TestCase):

@@ -6,7 +6,7 @@ import java.util.Properties
 // app/build.gradle.kts, so merges with Nuvio TV never touch our values (the app id, the version, the update repository,
 // the launcher's libraries). To release, bump the two version values here, commit, and run the Release workflow.
 
-val launcherVersionName = "0.0.1-beta.1"
+val launcherVersionName = "1.2.0-beta.4"
 val launcherVersionCode = 1
 val launcherApplicationId = "com.tv.launcher"
 

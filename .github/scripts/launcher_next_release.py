@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
-"""Decides which Nuvio TV tag the launcher should build next, and what version the launcher release gets.
-
-A Nuvio TV beta becomes our next beta and a Nuvio TV stable release becomes our stable release:
-
-    ours so far          Nuvio TV beta        Nuvio TV stable
-    nothing              0.0.1-beta.1         0.0.1
-    0.0.N-beta.M         0.0.N-beta.(M+1)     0.0.N
-    0.0.N                0.0.(N+1)-beta.1     0.0.(N+1)
+"""Decides which Nuvio TV tag the launcher should build next. Our release has the same version as the tag
+(Nuvio TV 1.2.0-beta.5 becomes Nuvio TV Launcher 1.2.0-beta.5, 1.2.0 becomes 1.2.0), so a user sees the same numbers in both.
 
 Tags are taken oldest first, one per run, so a stable release is never skipped. A tag counts as built when one of our
 releases says so ("Nuvio TV tag: <tag>" in its notes); BASELINE (the tag the launcher was first built on) and
 everything older than it are never built.
 
-Usage: launcher_next_release.py --upstream-tags FILE --built-tags FILE --our-releases FILE --baseline TAG
+Usage: launcher_next_release.py --upstream-tags FILE --built-tags FILE --baseline TAG
 (each FILE has one tag per line.) Prints one JSON object; "tag" is empty when there is nothing to build.
 """
 import argparse
@@ -61,23 +55,6 @@ def next_upstream_tag(upstream, built, baseline):
     return min(candidates, key=lambda c: sort_key(c[1]))
 
 
-def next_version(ours, prerelease):
-    mine = []
-    for tag in ours:
-        m = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$", tag.strip())
-        if m:
-            mine.append(tuple(int(x) if x is not None else None for x in m.groups()))
-    if not mine:
-        return "0.0.1-beta.1" if prerelease else "0.0.1"
-    # Highest by (major, minor, patch), then a stable release above its betas, then the beta number.
-    latest = max(mine, key=lambda v: (v[0], v[1], v[2], 1 if v[3] is None else 0, v[3] or 0))
-    major, minor, patch, beta = latest
-    base = f"{major}.{minor}"
-    if prerelease:
-        return f"{base}.{patch}-beta.{beta + 1}" if beta is not None else f"{base}.{patch + 1}-beta.1"
-    return f"{base}.{patch}" if beta is not None else f"{base}.{patch + 1}"
-
-
 def read_lines(path):
     with open(path, encoding="utf-8") as handle:
         return [line.strip() for line in handle if line.strip()]
@@ -87,7 +64,6 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--upstream-tags", required=True)
     ap.add_argument("--built-tags", required=True)
-    ap.add_argument("--our-releases", required=True)
     ap.add_argument("--baseline", required=True)
     args = ap.parse_args(argv)
 
@@ -100,7 +76,7 @@ def main(argv=None):
     print(json.dumps({
         "tag": tag,
         "prerelease": prerelease,
-        "version": next_version(read_lines(args.our_releases), prerelease),
+        "version": tag.lstrip("vV"),
     }))
     return 0
 

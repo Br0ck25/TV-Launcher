@@ -4,7 +4,7 @@ name: Release
 # (Settings -> About) reads this repository's releases, so everyone who has the app is offered the new version.
 #
 # The version comes from `launcherVersionName` in app/launcher.gradle.kts (bump it, commit, then run this). A version with a
-# suffix such as 0.0.1-beta.1 is published as a pre-release, which only the Beta update channel offers.
+# suffix such as 1.2.0-beta.4 is published as a pre-release, which only the Beta update channel offers.
 #
 # Run it from the Actions tab. Secrets (Settings -> Secrets and variables -> Actions):
 #   LAUNCHER_KEYSTORE_BASE64, LAUNCHER_KEY_ALIAS, LAUNCHER_KEY_PASSWORD, LAUNCHER_STORE_PASSWORD  (required: your signing key)
@@ -65,7 +65,7 @@ jobs:
         run: |
           version=$(sed -nE 's/^val launcherVersionName[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' app/launcher.gradle.kts | head -n 1)
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
-            echo "launcherVersionName '$version' in app/launcher.gradle.kts is not a version like 0.0.1 or 0.0.1-beta.1." >&2; exit 1
+            echo "launcherVersionName '$version' in app/launcher.gradle.kts is not a version like 1.2.0 or 1.2.0-beta.4." >&2; exit 1
           fi
           if gh release view "$version" >/dev/null 2>&1; then
             echo "A release named $version already exists. Bump launcherVersionName (and launcherVersionCode) in app/launcher.gradle.kts first." >&2; exit 1

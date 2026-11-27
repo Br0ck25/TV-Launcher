@@ -54,7 +54,7 @@ Branding (app icons in all colours, logo, wordmark, TV banner) replaces Nuvio TV
 ## Syncing with Nuvio TV
 
 **Releases and betas** follow Nuvio TV's tags: the **Follow Nuvio TV releases** workflow builds our beta when they tag a
-beta and our release when they tag a release (`.github/scripts/launcher_next_release.py` decides what to build and our version).
+beta and our release when they tag a release (`.github/scripts/launcher_next_release.py` decides what to build; our version is the tag's).
 Merging `dev` between releases is off unless the repository variable `SYNC_DEV` is `true`. By hand:
 
 ```bash
